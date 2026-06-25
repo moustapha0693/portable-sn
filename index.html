@@ -114,6 +114,7 @@
     display: grid; place-items: center;
   }
   .card-media svg { width: 56%; height: 56%; opacity: .85; }
+  .card-media img { width: 100%; height: 100%; object-fit: cover; }
   .tag {
     position: absolute; top: 10px; left: 10px; z-index: 2;
     font-size: 11px; font-weight: 800; color: #fff; padding: 4px 9px; border-radius: 8px;
@@ -159,6 +160,7 @@
   .cart-thumb { width: 64px; height: 64px; border-radius: 10px; flex: 0 0 auto;
     background: linear-gradient(135deg,#f1f5f9,#e2e8f0); display: grid; place-items: center; }
   .cart-thumb svg { width: 60%; height: 60%; opacity: .8; }
+  .cart-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
   .cart-info { flex: 1; min-width: 0; }
   .cart-info .name { font-size: 14px; }
   .cart-info .price { font-size: 14px; }
@@ -341,19 +343,35 @@
   /* ===== Catalogue produits =====
      Modifie/ajoute simplement des objets ici pour gérer le stock. */
   const PRODUCTS = [
-    { id: "s24u",  brand: "Samsung", name: "Galaxy S24 Ultra", price: 580000, stock: 2,  tag: "hot" },
-    { id: "xm14",  brand: "Xiaomi",  name: "Xiaomi 14",        price: 320000, stock: 8  },
-    { id: "spk20", brand: "Tecno",   name: "Spark 20 Pro",     price: 110000, stock: 12, oldPrice: 129000 },
-    { id: "a55",   brand: "Samsung", name: "Galaxy A55",       price: 215000, stock: 5,  oldPrice: 231000 },
-    { id: "ip15",  brand: "Apple",   name: "iPhone 15",        price: 690000, stock: 3,  tag: "hot" },
-    { id: "redn13",brand: "Xiaomi",  name: "Redmi Note 13",    price: 145000, stock: 0  },
-    { id: "ip14",  brand: "Apple",   name: "iPhone 14",        price: 575000, stock: 4,  oldPrice: 620000 },
-    { id: "camon", brand: "Tecno",   name: "Camon 30",         price: 135000, stock: 9  },
-    { id: "a05",   brand: "Samsung", name: "Galaxy A05",       price: 72000,  stock: 20 },
-    { id: "poco",  brand: "Xiaomi",  name: "Poco X6 Pro",      price: 235000, stock: 6,  tag: "hot" },
+    // --- Téléphones ---
+    { id: "s24u",  brand: "Samsung", name: "Galaxy S24 Ultra", price: 580000, stock: 2,  tag: "hot",  category: "Téléphones" },
+    { id: "xm14",  brand: "Xiaomi",  name: "Xiaomi 14",        price: 320000, stock: 8,               category: "Téléphones" },
+    { id: "spk20", brand: "Tecno",   name: "Spark 20 Pro",     price: 110000, stock: 12, oldPrice: 129000, category: "Téléphones" },
+    { id: "a55",   brand: "Samsung", name: "Galaxy A55",       price: 215000, stock: 5,  oldPrice: 231000, category: "Téléphones" },
+    { id: "ip15",  brand: "Apple",   name: "iPhone 15",        price: 690000, stock: 3,  tag: "hot",  category: "Téléphones" },
+    { id: "redn13",brand: "Xiaomi",  name: "Redmi Note 13",    price: 145000, stock: 0,               category: "Téléphones" },
+    { id: "ip14",  brand: "Apple",   name: "iPhone 14",        price: 575000, stock: 4,  oldPrice: 620000, category: "Téléphones" },
+    { id: "camon", brand: "Tecno",   name: "Camon 30",         price: 135000, stock: 9,               category: "Téléphones" },
+    { id: "a05",   brand: "Samsung", name: "Galaxy A05",       price: 72000,  stock: 20,              category: "Téléphones" },
+    { id: "poco",  brand: "Xiaomi",  name: "Poco X6 Pro",      price: 235000, stock: 6,  tag: "hot",  category: "Téléphones" },
+
+    // --- Accessoires ---
+    { id: "coque",   brand: "Spigen", name: "Coque Galaxy S24 Ultra", price: 9000,  stock: 30,              category: "Accessoires" },
+    { id: "chargeur",brand: "Oraimo", name: "Chargeur rapide 33W",    price: 12000, stock: 25,              category: "Accessoires" },
+    { id: "freepods",brand: "Oraimo", name: "Écouteurs FreePods 4",   price: 18000, stock: 15, oldPrice: 22000, category: "Accessoires" },
+    { id: "cable",   brand: "Anker",  name: "Câble USB-C 1m",         price: 4500,  stock: 40,              category: "Accessoires" },
+
+    // --- Électronique ---
+    { id: "powerbank", brand: "Oraimo", name: "Powerbank 20000mAh",     price: 25000, stock: 12, tag: "hot", category: "Électronique" },
+    { id: "band8",     brand: "Xiaomi", name: "Smart Band 8",           price: 32000, stock: 10,             category: "Électronique" },
+    { id: "jblgo",     brand: "JBL",    name: "Enceinte Bluetooth Go 3",price: 28000, stock: 8,              category: "Électronique" },
+
+    // --- Divers ---
+    { id: "verre",   brand: "Universel", name: "Verre trempé universel", price: 2000, stock: 50,            category: "Divers" },
+    { id: "support", brand: "Universel", name: "Support voiture",        price: 6500, stock: 18,            category: "Divers" },
   ];
 
-  const CATEGORIES = ["Tous", "Samsung", "Apple", "Xiaomi", "Tecno"];
+  const CATEGORIES = ["Tous", "Téléphones", "Accessoires", "Électronique", "Divers"];
 
   /* ===== État (persisté dans localStorage) ===== */
   const store = {
@@ -378,9 +396,27 @@
   const byId = (id) => PRODUCTS.find((p) => p.id === id);
   const fmt = (n) => n.toLocaleString("fr-FR").replace(/ | /g, " ") + " FCFA";
 
-  // Image placeholder SVG (téléphone) — rend le fichier 100 % autonome.
-  function phoneSvg() {
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 18h4"/></svg>';
+  // Image placeholder SVG adaptée à la catégorie — rend le fichier 100 % autonome.
+  function mediaSvg(category) {
+    const open = '<svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">';
+    const icons = {
+      "Téléphones":   '<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 18h4"/>',
+      "Accessoires":  '<path d="M3 14h3a2 2 0 0 0 2-2V7a4 4 0 0 1 8 0v5a2 2 0 0 0 2 2h3"/><path d="M3 14v3a3 3 0 0 0 3 3h0a2 2 0 0 0 2-2v-4M21 14v3a3 3 0 0 1-3 3h0a2 2 0 0 1-2-2v-4"/>',
+      "Électronique": '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M10 3V1.5h4V3M9 8h6M9 12h6"/>',
+      "Divers":       '<path d="M21 8 12 3 3 8l9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/>',
+    };
+    return open + (icons[category] || icons["Téléphones"]) + "</svg>";
+  }
+  // Exposé en global pour le repli onerror des <img>.
+  window.psnPlaceholder = mediaSvg;
+
+  // Affiche la photo du produit si fournie, sinon l'icône placeholder.
+  // En cas d'URL cassée, l'<img> est remplacée automatiquement par l'icône.
+  function mediaHtml(p) {
+    if (p.image) {
+      return `<img src="${p.image}" alt="${p.brand} ${p.name}" loading="lazy" onerror="this.outerHTML=window.psnPlaceholder('${p.category}')">`;
+    }
+    return mediaSvg(p.category);
   }
 
   /* ===== Rendu : catégories ===== */
@@ -395,7 +431,7 @@
   function filtered() {
     const q = store.query.trim().toLowerCase();
     return PRODUCTS.filter((p) => {
-      const okCat = store.cat === "Tous" || p.brand === store.cat;
+      const okCat = store.cat === "Tous" || p.category === store.cat || p.brand === store.cat;
       const okQ = !q || (p.brand + " " + p.name).toLowerCase().includes(q);
       return okCat && okQ;
     });
@@ -423,7 +459,7 @@
           <button class="fav-btn ${isFav ? "on" : ""}" data-fav="${p.id}" aria-label="Favori">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="${isFav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/></svg>
           </button>
-          ${phoneSvg()}
+          ${mediaHtml(p)}
         </div>
         <div class="card-body">
           <div class="brand">${p.brand}</div>
@@ -475,7 +511,7 @@
       total += p.price * q; count += q;
       return `
         <div class="cart-item">
-          <div class="cart-thumb">${phoneSvg()}</div>
+          <div class="cart-thumb">${mediaHtml(p)}</div>
           <div class="cart-info">
             <div class="brand">${p.brand}</div>
             <div class="name">${p.name}</div>
