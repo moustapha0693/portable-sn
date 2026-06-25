@@ -265,16 +265,19 @@
         <div class="sub">${variantRow(null)}</div>`;
       const imgs = (p.images || []).sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || a.position - b.position);
       imagesHtml = `
-        <div class="section-title">Images</div>
+        <div class="section-title">Photos du produit (${imgs.length}/3)</div>
+        ${imgs.length < 3 ? '<p class="hint">3 photos recommandées par produit.</p>' : ''}
         <div class="img-list">${imgs.map((im) => `
           <div class="img-item ${im.is_primary ? "primary" : ""}">
             <img src="${esc(im.url)}" alt="" onerror="this.style.opacity=.3" />
             <div>${im.is_primary ? "<b>Primaire</b>" : `<button class="btn-line btn-sm" data-action="set-primary" data-id="${im.id}">Primaire</button>`}</div>
             <button class="btn-danger btn-sm" data-action="delete-image" data-id="${im.id}">Suppr.</button>
           </div>`).join("")}</div>
-        <div class="field" style="margin-top:10px"><label>Ajouter une image (URL)</label>
-          <input id="img-url" type="url" placeholder="https://… ou data:image/…" /></div>
-        <button class="btn btn-line btn-sm" data-action="add-image">Ajouter l'image</button>`;
+        <div class="section-title" style="margin-top:14px">Ajouter des photos</div>
+        <div class="field"><input id="ph1" type="url" placeholder="URL photo 1 (https://… ou data:image/…)" /></div>
+        <div class="field"><input id="ph2" type="url" placeholder="URL photo 2" /></div>
+        <div class="field"><input id="ph3" type="url" placeholder="URL photo 3" /></div>
+        <button class="btn btn-line btn-sm" data-action="add-photos">Ajouter les photos</button>`;
     }
 
     $("#modal-card").innerHTML = `
@@ -392,15 +395,17 @@
     toast("Variante supprimée."); await loadProducts(); renderEditor();
   }
 
-  async function addImage() {
-    const url = $("#img-url").value.trim();
-    if (!url) return toast("Indique une URL d'image.");
-    const isFirst = (state.current.images || []).length === 0;
-    const pos = (state.current.images || []).length + 1;
-    const { error } = await sb.from("product_images")
-      .insert({ product_id: state.current.id, url, position: pos, is_primary: isFirst });
+  async function addPhotos() {
+    const urls = ["#ph1", "#ph2", "#ph3"].map((s) => ($(s) ? $(s).value.trim() : "")).filter(Boolean);
+    if (!urls.length) return toast("Indique au moins une URL de photo.");
+    const existing = (state.current.images || []).length;
+    const rows = urls.map((url, i) => ({
+      product_id: state.current.id, url, position: existing + i + 1, is_primary: existing === 0 && i === 0,
+    }));
+    const { error } = await sb.from("product_images").insert(rows);
     if (error) return toast("Erreur : " + error.message);
-    toast("Image ajoutée."); await loadProducts(); renderEditor();
+    toast(urls.length > 1 ? urls.length + " photos ajoutées." : "Photo ajoutée.");
+    await loadProducts(); renderEditor();
   }
   async function setPrimary(imgId) {
     await sb.from("product_images").update({ is_primary: false }).eq("product_id", state.current.id);
@@ -427,7 +432,7 @@
     else if (a === "delete-product") deleteProduct();
     else if (a === "save-variant") saveVariant(id);
     else if (a === "delete-variant") deleteVariant(id);
-    else if (a === "add-image") addImage();
+    else if (a === "add-photos") addPhotos();
     else if (a === "set-primary") setPrimary(id);
     else if (a === "delete-image") deleteImage(id);
   });
