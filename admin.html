@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Admin — portable.sn</title>
+<style>
+  /* ============================================================
+     portable.sn — Back-office (admin.html), sans framework.
+     Authentification Supabase + gestion Produits / Variantes / Images.
+     ============================================================ */
+  :root {
+    --blue:#2563eb; --green:#16a34a; --red:#ef4444; --orange:#f97316;
+    --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f1f5f9; --card:#fff;
+    --radius:12px; --shadow:0 1px 3px rgba(0,0,0,.08);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.45; }
+  button { font-family:inherit; cursor:pointer; border:none; background:none; }
+  input, select, textarea { font-family:inherit; }
+  a { color:var(--blue); }
+
+  /* ----- Connexion ----- */
+  #login { min-height:100vh; display:grid; place-items:center; padding:20px; }
+  .login-card { background:var(--card); border:1px solid var(--line); border-radius:16px;
+    box-shadow:var(--shadow); padding:28px; width:100%; max-width:380px; }
+  .login-card h1 { font-size:22px; font-weight:800; margin-bottom:4px; }
+  .login-card h1 .dot { color:var(--green); }
+  .login-card p { color:var(--muted); font-size:14px; margin-bottom:18px; }
+
+  .field { margin-bottom:14px; }
+  .field label { display:block; font-size:13px; font-weight:700; color:var(--muted); margin-bottom:6px; }
+  .field input, .field select, .field textarea {
+    width:100%; border:1px solid var(--line); border-radius:10px; padding:0 12px; height:44px;
+    font-size:15px; background:var(--bg); outline:none; }
+  .field textarea { height:auto; min-height:64px; padding:10px 12px; resize:vertical; }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color:var(--blue); background:#fff; }
+
+  .btn { height:44px; border-radius:10px; font-size:14px; font-weight:700; padding:0 16px;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+  .btn-primary { background:var(--ink); color:#fff; width:100%; }
+  .btn-blue { background:var(--blue); color:#fff; }
+  .btn-line { background:var(--card); color:var(--ink); border:1px solid var(--line); }
+  .btn-danger { background:#fef2f2; color:var(--red); border:1px solid #fecaca; }
+  .btn-sm { height:34px; font-size:13px; padding:0 12px; border-radius:8px; }
+  .btn:disabled { opacity:.6; cursor:not-allowed; }
+
+  .msg { font-size:13px; font-weight:600; padding:10px 12px; border-radius:10px; margin-bottom:12px; display:none; }
+  .msg.show { display:block; }
+  .msg.err { background:#fef2f2; color:var(--red); border:1px solid #fecaca; }
+
+  /* ----- App ----- */
+  #app { display:none; }
+  .topbar { background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:10;
+    display:flex; align-items:center; justify-content:space-between; padding:12px 16px; }
+  .topbar .logo { font-size:18px; font-weight:800; }
+  .topbar .logo .dot { color:var(--green); }
+  .topbar .who { font-size:13px; color:var(--muted); margin-right:10px; }
+  .wrap { max-width:1000px; margin:0 auto; padding:18px 16px 60px; }
+
+  .head-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:12px; flex-wrap:wrap; }
+  .head-row h2 { font-size:20px; font-weight:800; }
+  .search-admin { flex:1; min-width:160px; max-width:320px; height:40px; border:1px solid var(--line);
+    border-radius:10px; padding:0 12px; background:var(--card); }
+
+  /* ----- Tableau produits ----- */
+  .ptable { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+  .prow { display:grid; grid-template-columns:1fr 90px 80px 70px 92px; gap:8px; align-items:center;
+    padding:12px 14px; border-bottom:1px solid var(--line); font-size:14px; }
+  .prow:last-child { border-bottom:none; }
+  .prow.header { background:var(--bg); font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; }
+  .prow .pname { font-weight:700; }
+  .prow .pbrand { font-size:12px; color:var(--muted); }
+  .pill { font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; display:inline-block; }
+  .pill.on { background:#dcfce7; color:var(--green); }
+  .pill.off { background:#f3f4f6; color:var(--muted); }
+  .right { text-align:right; }
+  @media (max-width:640px){
+    .prow { grid-template-columns:1fr 70px 84px; }
+    .prow .col-stock, .prow .col-active { display:none; }
+  }
+
+  /* ----- Modale éditeur ----- */
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:50; display:none;
+    align-items:flex-start; justify-content:center; padding:20px; overflow:auto; }
+  .modal.show { display:flex; }
+  .modal-card { background:var(--card); border-radius:16px; width:100%; max-width:640px; padding:22px; margin:auto; }
+  .modal-card h3 { font-size:18px; font-weight:800; margin-bottom:14px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .row-check { display:flex; align-items:center; gap:8px; margin:6px 0; font-size:14px; }
+  .section-title { font-size:13px; font-weight:800; text-transform:uppercase; color:var(--muted);
+    margin:20px 0 10px; letter-spacing:.4px; }
+  .sub { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:8px; }
+  .var-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .var-grid .f-full { grid-column:1/-1; }
+  .var-grid input, .var-grid select { width:100%; height:38px; border:1px solid var(--line); border-radius:8px;
+    padding:0 10px; font-size:13px; background:#fff; }
+  .var-actions { display:flex; gap:8px; margin-top:8px; }
+  .img-list { display:flex; flex-wrap:wrap; gap:10px; }
+  .img-item { width:84px; text-align:center; }
+  .img-item img { width:84px; height:84px; object-fit:cover; border-radius:8px; border:2px solid var(--line); background:var(--bg); }
+  .img-item.primary img { border-color:var(--blue); }
+  .img-item button { font-size:11px; margin-top:3px; }
+  .modal-actions { display:flex; justify-content:space-between; gap:10px; margin-top:22px; }
+  .hint { font-size:13px; color:var(--muted); margin:8px 0; }
+
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); z-index:80;
+    background:var(--ink); color:#fff; padding:12px 18px; border-radius:12px; font-size:14px; font-weight:600;
+    opacity:0; pointer-events:none; transition:all .25s; max-width:90%; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- Connexion -->
+<div id="login">
+  <form class="login-card" id="login-form">
+    <h1>portable<span class="dot">.sn</span></h1>
+    <p>Espace d'administration</p>
+    <div class="msg err" id="login-msg"></div>
+    <div class="field"><label>Email</label><input id="login-email" type="email" autocomplete="username" required /></div>
+    <div class="field"><label>Mot de passe</label><input id="login-pass" type="password" autocomplete="current-password" required /></div>
+    <button class="btn btn-primary" id="login-btn" type="submit">Se connecter</button>
+  </form>
+</div>
+
+<!-- Application -->
+<div id="app">
+  <div class="topbar">
+    <span class="logo">portable<span class="dot">.sn</span> · Admin</span>
+    <div><span class="who" id="who"></span><button class="btn btn-line btn-sm" data-action="logout">Déconnexion</button></div>
+  </div>
+  <div class="wrap">
+    <div class="head-row">
+      <h2>Produits</h2>
+      <input class="search-admin" id="psearch" type="search" placeholder="Rechercher un produit…" />
+      <button class="btn btn-blue" data-action="new-product">+ Nouveau produit</button>
+    </div>
+    <div class="ptable" id="ptable"></div>
+  </div>
+</div>
+
+<!-- Modale éditeur produit -->
+<div class="modal" id="modal"><div class="modal-card" id="modal-card"></div></div>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function () {
+  "use strict";
+
+  const SUPABASE_URL = "https://uxvalsjtnuhbauerylro.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_fSoIxKIDRGtWHw-u7h2H4g_gIeaO5Yk";
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const fmt = (n) => Number(n || 0).toLocaleString("fr-FR") + " FCFA";
+  const slugify = (s) => s.toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+  const state = { products: [], categories: [], current: null, query: "" };
+
+  let toastTimer;
+  function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2200); }
+
+  /* ===================== Authentification ===================== */
+  function showLogin(msg) {
+    $("#app").style.display = "none";
+    $("#login").style.display = "grid";
+    if (msg) { const m = $("#login-msg"); m.textContent = msg; m.classList.add("show"); }
+  }
+  async function showApp(user) {
+    $("#login").style.display = "none";
+    $("#app").style.display = "block";
+    $("#who").textContent = user.email;
+    await loadCategories();
+    await loadProducts();
+  }
+
+  async function ensureAdminAndStart() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return showLogin();
+    const { data: isAdmin, error } = await sb.rpc("is_admin");
+    if (error || !isAdmin) { await sb.auth.signOut(); return showLogin("Ce compte n'est pas administrateur."); }
+    showApp(session.user);
+  }
+
+  $("#login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#login-btn"); btn.disabled = true; btn.textContent = "Connexion…";
+    $("#login-msg").classList.remove("show");
+    const email = $("#login-email").value.trim();
+    const password = $("#login-pass").value;
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) { btn.disabled = false; btn.textContent = "Se connecter";
+      const m = $("#login-msg"); m.textContent = "Identifiants invalides."; m.classList.add("show"); return; }
+    const { data: isAdmin } = await sb.rpc("is_admin");
+    if (!isAdmin) { await sb.auth.signOut(); btn.disabled = false; btn.textContent = "Se connecter";
+      const m = $("#login-msg"); m.textContent = "Ce compte n'est pas administrateur."; m.classList.add("show"); return; }
+    btn.disabled = false; btn.textContent = "Se connecter";
+    showApp(data.user);
+  });
+
+  /* ===================== Chargement des données ===================== */
+  async function loadCategories() {
+    const { data } = await sb.from("categories").select("id,name").order("position");
+    state.categories = data || [];
+  }
+  async function loadProducts() {
+    const { data, error } = await sb.from("products")
+      .select("id,slug,name,brand,description,is_hot,is_active,prix_base,stock_total,image_url," +
+              "category_id,category:categories(name)," +
+              "variants:product_variants(id,label,color,storage,price,old_price,stock_actuel,is_active,position)," +
+              "images:product_images(id,url,position,is_primary)")
+      .order("created_at", { ascending: true });
+    if (error) { toast("Erreur de chargement : " + error.message); return; }
+    state.products = data || [];
+    renderProducts();
+    if (state.current) state.current = state.products.find((p) => p.id === state.current.id) || null;
+  }
+
+  /* ===================== Liste des produits ===================== */
+  function renderProducts() {
+    const q = state.query.trim().toLowerCase();
+    const list = state.products.filter((p) =>
+      !q || (p.name + " " + (p.brand || "")).toLowerCase().includes(q));
+    const rows = list.map((p) => `
+      <div class="prow" data-action="edit-product" data-id="${p.id}">
+        <div><div class="pname">${esc(p.name)}</div><div class="pbrand">${esc(p.brand || "")} · ${esc(p.category ? p.category.name : "—")}</div></div>
+        <div class="right">${fmt(p.prix_base)}</div>
+        <div class="right col-stock">${p.stock_total}</div>
+        <div class="col-active">${p.is_active ? '<span class="pill on">Actif</span>' : '<span class="pill off">Masqué</span>'}</div>
+        <div class="right"><button class="btn btn-line btn-sm" data-action="edit-product" data-id="${p.id}">Modifier</button></div>
+      </div>`).join("");
+    $("#ptable").innerHTML =
+      `<div class="prow header"><div>Produit</div><div class="right">Prix</div><div class="right col-stock">Stock</div><div class="col-active">État</div><div></div></div>` +
+      (rows || `<div class="prow"><div style="color:var(--muted)">Aucun produit.</div></div>`);
+  }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+  /* ===================== Éditeur produit ===================== */
+  function openEditor(id) {
+    state.current = id ? state.products.find((p) => p.id === id) : null;
+    renderEditor();
+    $("#modal").classList.add("show");
+  }
+  function closeEditor() { $("#modal").classList.remove("show"); state.current = null; }
+
+  function renderEditor() {
+    const p = state.current;
+    const isNew = !p;
+    const catOpts = state.categories.map((c) =>
+      `<option value="${c.id}" ${p && p.category_id === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("");
+
+    let variantsHtml = "", imagesHtml = "";
+    if (!isNew) {
+      const vrows = (p.variants || []).sort((a, b) => a.position - b.position).map((v) => variantRow(v)).join("");
+      variantsHtml = `
+        <div class="section-title">Variantes</div>
+        ${vrows || '<p class="hint">Aucune variante. Ajoute-en au moins une.</p>'}
+        <div class="sub">${variantRow(null)}</div>`;
+      const imgs = (p.images || []).sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || a.position - b.position);
+      imagesHtml = `
+        <div class="section-title">Images</div>
+        <div class="img-list">${imgs.map((im) => `
+          <div class="img-item ${im.is_primary ? "primary" : ""}">
+            <img src="${esc(im.url)}" alt="" onerror="this.style.opacity=.3" />
+            <div>${im.is_primary ? "<b>Primaire</b>" : `<button class="btn-line btn-sm" data-action="set-primary" data-id="${im.id}">Primaire</button>`}</div>
+            <button class="btn-danger btn-sm" data-action="delete-image" data-id="${im.id}">Suppr.</button>
+          </div>`).join("")}</div>
+        <div class="field" style="margin-top:10px"><label>Ajouter une image (URL)</label>
+          <input id="img-url" type="url" placeholder="https://… ou data:image/…" /></div>
+        <button class="btn btn-line btn-sm" data-action="add-image">Ajouter l'image</button>`;
+    }
+
+    $("#modal-card").innerHTML = `
+      <h3>${isNew ? "Nouveau produit" : "Modifier le produit"}</h3>
+      <div class="grid2">
+        <div class="field"><label>Nom *</label><input id="f-name" value="${esc(p ? p.name : "")}" /></div>
+        <div class="field"><label>Marque</label><input id="f-brand" value="${esc(p ? p.brand : "")}" /></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Catégorie</label><select id="f-cat"><option value="">—</option>${catOpts}</select></div>
+        <div class="field"><label>Slug (auto si vide)</label><input id="f-slug" value="${esc(p ? p.slug : "")}" /></div>
+      </div>
+      <div class="field"><label>Description</label><textarea id="f-desc">${esc(p ? p.description : "")}</textarea></div>
+      <div class="field"><label>Image de couverture (URL, facultatif)</label><input id="f-image" value="${esc(p ? p.image_url : "")}" /></div>
+      <label class="row-check"><input type="checkbox" id="f-hot" ${p && p.is_hot ? "checked" : ""} /> Produit en vedette (HOT)</label>
+      <label class="row-check"><input type="checkbox" id="f-active" ${!p || p.is_active ? "checked" : ""} /> Visible dans la boutique</label>
+      ${isNew ? '<p class="hint">Enregistre le produit pour pouvoir ajouter ses variantes et images.</p>' : ""}
+      ${variantsHtml}
+      ${imagesHtml}
+      <div class="modal-actions">
+        ${isNew ? "<span></span>" : `<button class="btn btn-danger" data-action="delete-product">Supprimer</button>`}
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-line" data-action="close-modal">Fermer</button>
+          <button class="btn btn-primary" data-action="save-product">Enregistrer</button>
+        </div>
+      </div>`;
+  }
+
+  function variantRow(v) {
+    const id = v ? v.id : "new";
+    return `
+      <div class="sub var-row" data-vid="${id}">
+        <div class="var-grid">
+          <input class="v-label f-full" placeholder="Libellé (ex. Noir · 128 Go)" value="${esc(v ? v.label : "")}" />
+          <input class="v-color" placeholder="Couleur" value="${esc(v ? v.color : "")}" />
+          <input class="v-storage" placeholder="Capacité" value="${esc(v ? v.storage : "")}" />
+          <input class="v-price" type="number" placeholder="Prix" value="${v ? v.price : ""}" />
+          <input class="v-old" type="number" placeholder="Prix barré" value="${v && v.old_price != null ? v.old_price : ""}" />
+          <input class="v-stock" type="number" placeholder="Stock" value="${v ? v.stock_actuel : ""}" />
+        </div>
+        <label class="row-check"><input type="checkbox" class="v-active" ${!v || v.is_active ? "checked" : ""}/> Variante active</label>
+        <div class="var-actions">
+          <button class="btn btn-blue btn-sm" data-action="save-variant" data-id="${id}">${v ? "Enregistrer" : "Ajouter la variante"}</button>
+          ${v ? `<button class="btn btn-danger btn-sm" data-action="delete-variant" data-id="${id}">Supprimer</button>` : ""}
+        </div>
+      </div>`;
+  }
+
+  /* ===================== Opérations CRUD ===================== */
+  async function saveProduct() {
+    const name = $("#f-name").value.trim();
+    if (!name) return toast("Le nom est obligatoire.");
+    let slug = $("#f-slug").value.trim() || slugify(name);
+    const payload = {
+      name, slug,
+      brand: $("#f-brand").value.trim() || null,
+      category_id: $("#f-cat").value ? Number($("#f-cat").value) : null,
+      description: $("#f-desc").value.trim() || null,
+      image_url: $("#f-image").value.trim() || null,
+      is_hot: $("#f-hot").checked,
+      is_active: $("#f-active").checked,
+    };
+    let res;
+    if (state.current) res = await sb.from("products").update(payload).eq("id", state.current.id).select().single();
+    else res = await sb.from("products").insert(payload).select().single();
+    if (res.error) return toast("Erreur : " + res.error.message);
+    toast("Produit enregistré.");
+    await loadProducts();
+    openEditor(res.data.id); // ré-ouvre en mode édition (permet variantes/images)
+  }
+
+  async function deleteProduct() {
+    if (!state.current) return;
+    if (!confirm("Supprimer définitivement ce produit, ses variantes et images ?")) return;
+    const { error } = await sb.from("products").delete().eq("id", state.current.id);
+    if (error) return toast("Erreur : " + error.message);
+    toast("Produit supprimé."); closeEditor(); await loadProducts();
+  }
+
+  async function saveVariant(vid) {
+    const row = $(`.var-row[data-vid="${vid}"]`);
+    const num = (sel) => { const x = row.querySelector(sel).value.trim(); return x === "" ? null : Number(x); };
+    const price = num(".v-price"); const stock = num(".v-stock"); const old = num(".v-old");
+    if (price == null || price < 0) return toast("Prix invalide.");
+    if (stock == null || stock < 0) return toast("Stock invalide.");
+    const base = {
+      label: row.querySelector(".v-label").value.trim() || "Standard",
+      color: row.querySelector(".v-color").value.trim() || null,
+      storage: row.querySelector(".v-storage").value.trim() || null,
+      price, old_price: old,
+      is_active: row.querySelector(".v-active").checked,
+    };
+    if (vid === "new") {
+      const ins = await sb.from("product_variants")
+        .insert({ ...base, product_id: state.current.id, stock_initial: stock, stock_actuel: stock }).select().single();
+      if (ins.error) return toast("Erreur : " + ins.error.message);
+    } else {
+      const upd = await sb.from("product_variants").update(base).eq("id", vid);
+      if (upd.error) return toast("Erreur : " + upd.error.message);
+      const cur = (state.current.variants || []).find((v) => v.id === vid);
+      const delta = stock - (cur ? cur.stock_actuel : 0);
+      if (delta !== 0) {
+        const mv = await sb.from("stock_movements")
+          .insert({ variant_id: vid, type: "ajustement", quantity: delta, reason: "Ajustement admin" });
+        if (mv.error) return toast("Stock non ajusté : " + mv.error.message);
+      }
+    }
+    toast("Variante enregistrée."); await loadProducts(); renderEditor();
+  }
+
+  async function deleteVariant(vid) {
+    if (!confirm("Supprimer cette variante ?")) return;
+    const { error } = await sb.from("product_variants").delete().eq("id", vid);
+    if (error) return toast("Erreur : " + error.message);
+    toast("Variante supprimée."); await loadProducts(); renderEditor();
+  }
+
+  async function addImage() {
+    const url = $("#img-url").value.trim();
+    if (!url) return toast("Indique une URL d'image.");
+    const isFirst = (state.current.images || []).length === 0;
+    const pos = (state.current.images || []).length + 1;
+    const { error } = await sb.from("product_images")
+      .insert({ product_id: state.current.id, url, position: pos, is_primary: isFirst });
+    if (error) return toast("Erreur : " + error.message);
+    toast("Image ajoutée."); await loadProducts(); renderEditor();
+  }
+  async function setPrimary(imgId) {
+    await sb.from("product_images").update({ is_primary: false }).eq("product_id", state.current.id);
+    const { error } = await sb.from("product_images").update({ is_primary: true }).eq("id", imgId);
+    if (error) return toast("Erreur : " + error.message);
+    await loadProducts(); renderEditor();
+  }
+  async function deleteImage(imgId) {
+    const { error } = await sb.from("product_images").delete().eq("id", imgId);
+    if (error) return toast("Erreur : " + error.message);
+    toast("Image supprimée."); await loadProducts(); renderEditor();
+  }
+
+  /* ===================== Événements ===================== */
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-action]");
+    if (!t) return;
+    const a = t.dataset.action, id = t.dataset.id;
+    if (a === "logout") { sb.auth.signOut().then(() => showLogin()); }
+    else if (a === "new-product") openEditor(null);
+    else if (a === "edit-product") openEditor(id);
+    else if (a === "close-modal") closeEditor();
+    else if (a === "save-product") saveProduct();
+    else if (a === "delete-product") deleteProduct();
+    else if (a === "save-variant") saveVariant(id);
+    else if (a === "delete-variant") deleteVariant(id);
+    else if (a === "add-image") addImage();
+    else if (a === "set-primary") setPrimary(id);
+    else if (a === "delete-image") deleteImage(id);
+  });
+  // Fermer la modale en cliquant sur le fond
+  $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeEditor(); });
+  $("#psearch").addEventListener("input", (e) => { state.query = e.target.value; renderProducts(); });
+
+  /* ===================== Démarrage ===================== */
+  ensureAdminAndStart();
+})();
+</script>
+</body>
+</html>
