@@ -259,6 +259,49 @@
     color: var(--muted); background: var(--card); transition: color .15s, border-color .15s; }
   .pd-fav.on { color: var(--red); border-color: var(--red); }
   .cart-variant { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  /* ---------- Tunnel de commande ---------- */
+  #view-checkout { padding: 8px 12px 24px; }
+  .ck-title { font-size: 20px; font-weight: 800; margin: 6px 4px 14px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+  .field input, .field select, .field textarea {
+    width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; height: 48px;
+    font-size: 16px; font-family: inherit; background: var(--bg); color: var(--ink); outline: none;
+  }
+  .field textarea { height: auto; padding: 12px 14px; min-height: 70px; resize: vertical; }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--blue); background: #fff; }
+  .field input.invalid { border-color: var(--red); background: #fef2f2; }
+
+  .pay-options { display: flex; flex-direction: column; gap: 10px; }
+  .pay-option {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+    border: 1.5px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--card);
+    font-size: 15px; font-weight: 600; color: var(--ink); text-align: left;
+  }
+  .pay-option.selected { border-color: var(--blue); background: #eff6ff; }
+  .pay-option.disabled { opacity: .65; cursor: not-allowed; }
+  .pay-tag { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #dcfce7; color: var(--green); }
+  .pay-tag.soon { background: #fef3c7; color: #b45309; }
+
+  #ck-error { display: none; background: #fef2f2; color: var(--red); border: 1px solid #fecaca;
+    border-radius: 12px; padding: 12px 14px; font-size: 14px; font-weight: 600; margin: 6px 0 14px; }
+  #ck-error.show { display: block; }
+
+  .btn-ghost { width: 100%; height: 50px; border-radius: 12px; background: var(--card); color: var(--ink);
+    border: 1.5px solid var(--line); font-size: 15px; font-weight: 700; margin-top: 10px; }
+
+  /* ---------- Confirmation ---------- */
+  .confirm { text-align: center; padding: 28px 16px; }
+  .confirm-icon { width: 72px; height: 72px; border-radius: 999px; background: var(--green); color: #fff;
+    font-size: 40px; display: grid; place-items: center; margin: 0 auto 16px; }
+  .confirm h2 { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+  .confirm p { color: var(--muted); margin-bottom: 18px; }
+  .confirm-ref { background: var(--bg); border: 1px dashed var(--line); border-radius: 14px; padding: 16px;
+    font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+  .confirm-ref strong { display: inline-block; margin-top: 4px; font-size: 22px; color: var(--ink); letter-spacing: 1px; }
+  .confirm-line { font-size: 15px; margin-bottom: 8px; }
+  .confirm-wa { margin-top: 18px; }
 </style>
 </head>
 <body>
@@ -301,6 +344,9 @@
 
   <!-- Vue Fiche produit (remplie dynamiquement par renderProduct) -->
   <section class="view" id="view-produit"></section>
+
+  <!-- Vue Commande : formulaire puis confirmation (remplie dynamiquement) -->
+  <section class="view" id="view-checkout"></section>
 
   <!-- Vue Panier -->
   <section class="view" id="view-panier">
@@ -396,8 +442,9 @@
     favs: load("psn_favs", []),   // [ productId, ... ]  (favoris au niveau produit)
     cat: "Tous",
     query: "",
-    prevView: "accueil",          // vue d'où l'on a ouvert une fiche produit
+    prevView: "accueil",          // vue d'où l'on a ouvert une fiche produit / le checkout
     detail: { pid: null, color: null, storage: null, variantId: null, img: null },
+    checkout: { zoneId: null, pay: "cod" },
   };
 
   function load(key, fallback) {
@@ -555,11 +602,10 @@
     list.innerHTML = rows + `
       <div class="cart-summary">
         <div class="summary-row"><span>Articles (${count})</span><span>${fmt(total)}</span></div>
-        <div class="summary-row"><span>Livraison</span><span>À convenir</span></div>
-        <div class="summary-row total"><span>Total</span><span>${fmt(total)}</span></div>
-        <button class="btn-primary" id="checkout">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M.057 24l1.687-6.163a11.867 11.867 0 0 1-1.587-5.946C.16 5.335 5.495 0 12.05 0a11.82 11.82 0 0 1 8.413 3.488 11.82 11.82 0 0 1 3.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 0 1-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 0 0 1.51 5.26l-.999 3.648 3.978-1.038z"/></svg>
-          Commander sur WhatsApp
+        <div class="summary-row"><span>Livraison</span><span>calculée à l'étape suivante</span></div>
+        <div class="summary-row total"><span>Sous-total</span><span>${fmt(total)}</span></div>
+        <button class="btn-primary" data-checkout style="background:var(--ink)">
+          Commander
         </button>
       </div>`;
   }
@@ -608,22 +654,160 @@
     if (isView("produit") && store.detail.pid) renderProduct();
   }
 
-  function checkout() {
-    const ids = Object.keys(store.cart);
-    if (!ids.length) return;
-    let total = 0;
-    const lines = ids.map((vid) => {
-      const v = variantById(vid); if (!v) return "";
-      const q = store.cart[vid];
-      total += v.price * q;
-      const suffix = (v.label && v.label !== "Standard") ? ` ${v.label}` : "";
-      return `• ${q} × ${v.product.brand} ${v.product.name}${suffix} — ${fmt(v.price * q)}`;
-    });
-    const msg =
-      "Bonjour " + (SETTINGS.store_name || "portable.sn") + ", je souhaite commander :\n\n" +
-      lines.join("\n") +
-      `\n\nTotal : ${fmt(total)}\n\nMerci de me confirmer la disponibilité et la livraison.`;
-    window.open(`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}`, "_blank");
+  /* ===== Tunnel de commande ===== */
+  // Modes de paiement (extensible : passer "active:true" quand un paiement en ligne sera prêt)
+  const PAYMENTS = [
+    { id: "cod",  label: "Paiement à la livraison", active: true,  tag: "Disponible" },
+    { id: "wave", label: "Wave",                    active: false, tag: "Bientôt" },
+    { id: "om",   label: "Orange Money",            active: false, tag: "Bientôt" },
+  ];
+  const payLabel = (id) => (PAYMENTS.find((p) => p.id === id) || {}).label || id;
+
+  function cartSubtotal() {
+    return Object.keys(store.cart).reduce((s, vid) => s + (variantById(vid)?.price || 0) * store.cart[vid], 0);
+  }
+  function computeDelivery(subtotal, zone) {
+    if (!zone) return 0;
+    const thr = SETTINGS.free_delivery_threshold;
+    if (thr != null && subtotal >= thr) return 0;
+    return zone.fee || 0;
+  }
+
+  function openCheckout() {
+    if (!Object.keys(store.cart).length) return;
+    store.prevView = "panier";
+    store.checkout = { zoneId: (ZONES[0] && ZONES[0].id) || null, pay: "cod" };
+    renderCheckout();
+    go("checkout");
+  }
+
+  function renderCheckout() {
+    const subtotal = cartSubtotal();
+    const zone = ZONES.find((z) => z.id === store.checkout.zoneId) || ZONES[0];
+    const fee = computeDelivery(subtotal, zone);
+    const zoneOpts = ZONES.map((z) =>
+      `<option value="${z.id}" ${z.id === (zone && zone.id) ? "selected" : ""}>${z.name}${z.fee ? " — " + fmt(z.fee) : " — Gratuit"}</option>`).join("");
+    const payOpts = PAYMENTS.map((p) =>
+      `<button type="button" class="pay-option ${p.id === store.checkout.pay ? "selected" : ""} ${p.active ? "" : "disabled"}"
+         data-pay="${p.id}" ${p.active ? "" : "disabled"}>
+         <span class="pay-name">${p.label}</span>
+         <span class="pay-tag ${p.active ? "" : "soon"}">${p.tag}</span>
+       </button>`).join("");
+
+    $("#view-checkout").innerHTML = `
+      <button class="pd-back" data-back aria-label="Retour">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        Retour au panier
+      </button>
+      <h2 class="ck-title">Validation de la commande</h2>
+      <div id="ck-error"></div>
+      <div class="field"><label>Nom complet *</label><input id="ck-name" type="text" autocomplete="name" placeholder="Ton nom" /></div>
+      <div class="field"><label>Téléphone *</label><input id="ck-phone" type="tel" autocomplete="tel" placeholder="+221 …" /></div>
+      <div class="field"><label>Adresse de livraison</label><input id="ck-address" type="text" autocomplete="street-address" placeholder="Quartier, rue, repère" /></div>
+      <div class="field"><label>Zone de livraison *</label><select id="ck-zone">${zoneOpts}</select></div>
+      <div class="field"><label>Mode de paiement *</label><div class="pay-options">${payOpts}</div></div>
+      <div class="field"><label>Note (facultatif)</label><textarea id="ck-note" placeholder="Précisions sur la livraison…"></textarea></div>
+      <div class="cart-summary" style="position:static;box-shadow:none;margin-top:4px">
+        <div class="summary-row"><span>Sous-total</span><span>${fmt(subtotal)}</span></div>
+        <div class="summary-row"><span>Livraison</span><span id="ck-fee">${fee === 0 ? "Offerte" : fmt(fee)}</span></div>
+        <div class="summary-row total"><span>Total</span><span id="ck-total">${fmt(subtotal + fee)}</span></div>
+        <button class="btn-primary" id="submit-order" style="background:var(--ink)">Valider ma commande</button>
+      </div>`;
+  }
+
+  function updateCheckoutSummary() {
+    const subtotal = cartSubtotal();
+    const zone = ZONES.find((z) => z.id === Number($("#ck-zone")?.value));
+    const fee = computeDelivery(subtotal, zone);
+    if ($("#ck-fee")) $("#ck-fee").textContent = fee === 0 ? "Offerte" : fmt(fee);
+    if ($("#ck-total")) $("#ck-total").textContent = fmt(subtotal + fee);
+  }
+
+  function selectPayment(el) {
+    if (el.classList.contains("disabled")) return;
+    $$(".pay-option").forEach((o) => o.classList.remove("selected"));
+    el.classList.add("selected");
+    store.checkout.pay = el.dataset.pay;
+  }
+
+  function ckError(msg) {
+    const e = $("#ck-error");
+    e.textContent = msg; e.classList.add("show");
+    e.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  async function submitOrder() {
+    const name = $("#ck-name").value.trim();
+    const phone = $("#ck-phone").value.trim();
+    const address = $("#ck-address").value.trim();
+    const zoneId = Number($("#ck-zone").value) || null;
+    const note = $("#ck-note").value.trim();
+    const pay = store.checkout.pay || "cod";
+
+    // Validation des champs
+    $("#ck-name").classList.toggle("invalid", !name);
+    $("#ck-phone").classList.toggle("invalid", phone.replace(/\D/g, "").length < 9);
+    if (!name) return ckError("Le nom complet est obligatoire.");
+    if (phone.replace(/\D/g, "").length < 9) return ckError("Numéro de téléphone invalide.");
+    if (!zoneId) return ckError("Choisis une zone de livraison.");
+
+    const items = Object.entries(store.cart).map(([vid, q]) => ({ variant_id: vid, quantity: q }));
+    if (!items.length) return go("panier");
+
+    const fullNote = "Mode de paiement : " + payLabel(pay) + (note ? "\n" + note : "");
+    const btn = $("#submit-order");
+    btn.disabled = true; const old = btn.textContent; btn.textContent = "Traitement…";
+    $("#ck-error").classList.remove("show");
+
+    try {
+      const { data, error } = await sb.rpc("passer_commande", {
+        p_customer_name: name,
+        p_customer_phone: phone,
+        p_customer_address: address || null,
+        p_items: items,
+        p_delivery_zone_id: zoneId,
+        p_coupon_code: null,
+        p_note: fullNote,
+        p_channel: "web",
+      });
+      if (error) {                       // erreur métier renvoyée par la RPC (message FR précis)
+        btn.disabled = false; btn.textContent = old;
+        return ckError(error.message || "La commande a été refusée. Réessaie.");
+      }
+      const order = Array.isArray(data) ? data[0] : data;
+      if (!order || !order.reference) {
+        btn.disabled = false; btn.textContent = old;
+        return ckError("Réponse inattendue du serveur. Réessaie.");
+      }
+      store.cart = {}; save(); renderBadges();
+      renderConfirmation(order, pay);
+    } catch (e) {                        // exception (réseau / serveur injoignable)
+      console.error("passer_commande:", e);
+      btn.disabled = false; btn.textContent = old;
+      ckError("Erreur réseau : impossible de joindre le serveur. Vérifie ta connexion et réessaie.");
+    }
+  }
+
+  function renderConfirmation(order, pay) {
+    const ref = order.reference;
+    const total = order.total ?? 0;
+    const waMsg = "Bonjour " + (SETTINGS.store_name || "portable.sn") +
+      `, je viens de passer la commande ${ref} (total ${fmt(total)}). Pouvez-vous me confirmer la livraison ?`;
+    const waHref = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(waMsg)}`;
+    $("#view-checkout").innerHTML = `
+      <div class="confirm">
+        <div class="confirm-icon">✓</div>
+        <h2>Commande confirmée !</h2>
+        <p>Merci, ta commande a bien été enregistrée.</p>
+        <div class="confirm-ref">Référence de commande<br><strong>${ref}</strong></div>
+        <div class="confirm-line">Total : <strong>${fmt(total)}</strong></div>
+        <div class="confirm-line">Paiement : ${payLabel(pay)}</div>
+        <a class="btn-primary confirm-wa" href="${waHref}" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M.057 24l1.687-6.163a11.867 11.867 0 0 1-1.587-5.946C.16 5.335 5.495 0 12.05 0a11.82 11.82 0 0 1 8.413 3.488 11.82 11.82 0 0 1 3.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 0 1-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 0 0 1.51 5.26l-.999 3.648 3.978-1.038z"/></svg>
+          Contacter sur WhatsApp
+        </a>
+        <button class="btn-ghost" data-go="accueil">Continuer mes achats</button>
+      </div>`;
   }
 
   /* ===== Navigation entre vues ===== */
@@ -781,7 +965,8 @@
   document.addEventListener("click", (e) => {
     const t = e.target.closest(
       "[data-add],[data-fav],[data-inc],[data-dec],[data-del],[data-go],[data-cat]," +
-      "[data-open],[data-back],[data-vcolor],[data-vstorage],[data-vmodel],[data-thumb],#checkout");
+      "[data-open],[data-back],[data-vcolor],[data-vstorage],[data-vmodel],[data-thumb]," +
+      "[data-checkout],[data-pay],#submit-order");
     if (!t) return;
     if (t.dataset.add) addToCart(t.dataset.add);
     else if (t.dataset.fav) toggleFav(t.dataset.fav);
@@ -793,10 +978,20 @@
     else if (t.dataset.vmodel) selectModel(t.dataset.vmodel);
     else if (t.dataset.thumb) { store.detail.img = t.dataset.thumb; renderProduct(); }
     else if (t.dataset.open) openProduct(t.dataset.open);
+    else if (t.dataset.pay !== undefined && t.classList.contains("pay-option")) selectPayment(t);
+    else if (t.id === "submit-order") submitOrder();
+    else if (t.hasAttribute("data-checkout")) openCheckout();
     else if (t.hasAttribute("data-back")) go(store.prevView || "accueil");
     else if (t.dataset.go) go(t.dataset.go);
     else if (t.dataset.cat) { store.cat = t.dataset.cat; renderCats(); renderGrid(); go("accueil"); }
-    else if (t.id === "checkout") checkout();
+  });
+
+  // Mise à jour du total quand la zone de livraison change
+  document.addEventListener("change", (e) => {
+    if (e.target && e.target.id === "ck-zone") {
+      store.checkout.zoneId = Number(e.target.value) || null;
+      updateCheckoutSummary();
+    }
   });
 
   // Recherche en direct
