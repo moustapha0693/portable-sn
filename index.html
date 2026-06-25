@@ -222,6 +222,43 @@
     opacity: 0; pointer-events: none; transition: all .25s; max-width: 90%; text-align: center;
   }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ---------- Fiche produit ---------- */
+  .card { cursor: pointer; }
+  #view-produit { padding: 8px 12px 24px; }
+  .pd-back { display: flex; align-items: center; gap: 4px; font-size: 15px; font-weight: 600; color: var(--ink); padding: 8px 4px; }
+  .pd-gallery { margin-bottom: 16px; }
+  .pd-main { position: relative; aspect-ratio: 1 / 1; background: linear-gradient(135deg,#f1f5f9,#e2e8f0);
+    border-radius: var(--radius); overflow: hidden; display: grid; place-items: center; }
+  .pd-main img { width: 100%; height: 100%; object-fit: cover; }
+  .pd-main-ph svg { width: 50%; height: 50%; opacity: .85; }
+  .pd-main .tag { top: 12px; left: 12px; }
+  .pd-thumbs { display: flex; gap: 8px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; }
+  .pd-thumbs::-webkit-scrollbar { display: none; }
+  .pd-thumb { flex: 0 0 auto; width: 60px; height: 60px; border-radius: 10px; overflow: hidden;
+    border: 2px solid transparent; background: #f1f5f9; padding: 0; }
+  .pd-thumb.active { border-color: var(--blue); }
+  .pd-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .pd-name { font-size: 22px; font-weight: 800; line-height: 1.2; margin: 2px 0 6px; }
+  .pd-rating { font-size: 14px; color: #f59e0b; font-weight: 700; margin-bottom: 8px; }
+  .pd-rating span { color: var(--muted); font-weight: 500; }
+  .pd-price-row { display: flex; align-items: baseline; gap: 10px; margin: 6px 0; }
+  .pd-price { font-size: 24px; font-weight: 800; }
+  .pd-old { font-size: 15px; color: var(--muted); text-decoration: line-through; }
+  .pd-desc { font-size: 14px; color: #374151; line-height: 1.6; margin-top: 14px; }
+  .vgroup { margin-top: 16px; }
+  .vlabel { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .4px; }
+  .vchips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .vchip { padding: 9px 16px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card);
+    font-size: 14px; font-weight: 600; color: var(--ink); }
+  .vchip.active { border-color: var(--blue); color: var(--blue); background: #eff6ff; }
+  .vchip.off { color: #cbd5e1; text-decoration: line-through; cursor: not-allowed; }
+  .pd-actions { display: flex; gap: 10px; align-items: stretch; margin-top: 22px; }
+  .pd-add { flex: 1; height: 52px; font-size: 15px; }
+  .pd-fav { width: 52px; border: 1.5px solid var(--line); border-radius: 12px; display: grid; place-items: center;
+    color: var(--muted); background: var(--card); transition: color .15s, border-color .15s; }
+  .pd-fav.on { color: var(--red); border-color: var(--red); }
+  .cart-variant { font-size: 12px; color: var(--muted); margin-top: 1px; }
 </style>
 </head>
 <body>
@@ -261,6 +298,9 @@
       <p>Aucun produit ne correspond à ta recherche.</p>
     </div>
   </section>
+
+  <!-- Vue Fiche produit (remplie dynamiquement par renderProduct) -->
+  <section class="view" id="view-produit"></section>
 
   <!-- Vue Panier -->
   <section class="view" id="view-panier">
@@ -344,17 +384,20 @@
 
   /* ===== Données chargées depuis Supabase ===== */
   let WHATSAPP   = "221770000000"; // valeur par défaut, surchargée par settings
-  let PRODUCTS   = [];             // catalogue (products + variante par défaut + image)
+  let PRODUCTS   = [];             // catalogue (products + variantes + images)
+  let VARIANTS   = {};             // index variantId -> { ...variante, product }
   let CATEGORIES = ["Tous"];       // puces de catégories
   let ZONES      = [];             // zones de livraison (pour le tunnel de commande, étape 4)
   let SETTINGS   = {};             // paramètres globaux (settings)
 
   /* ===== État (persisté dans localStorage) ===== */
   const store = {
-    cart: load("psn_cart", {}),       // { id: quantité }
-    favs: load("psn_favs", []),       // [ id, ... ]
+    cart: load("psn_cart2", {}),  // { variantId: quantité }  (clé v2 = par variante)
+    favs: load("psn_favs", []),   // [ productId, ... ]  (favoris au niveau produit)
     cat: "Tous",
     query: "",
+    prevView: "accueil",          // vue d'où l'on a ouvert une fiche produit
+    detail: { pid: null, color: null, storage: null, variantId: null, img: null },
   };
 
   function load(key, fallback) {
@@ -362,7 +405,7 @@
     catch { return fallback; }
   }
   function save() {
-    localStorage.setItem("psn_cart", JSON.stringify(store.cart));
+    localStorage.setItem("psn_cart2", JSON.stringify(store.cart));
     localStorage.setItem("psn_favs", JSON.stringify(store.favs));
   }
 
@@ -370,6 +413,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const byId = (id) => PRODUCTS.find((p) => p.id === id);
+  const variantById = (vid) => VARIANTS[vid];
   const fmt = (n) => n.toLocaleString("fr-FR").replace(/ | /g, " ") + " FCFA";
 
   // Image placeholder SVG adaptée à la catégorie — rend le fichier 100 % autonome.
@@ -428,8 +472,9 @@
           ? `<div class="stock"><span class="ic-dot"></span> ${p.stock} en stock</div>`
           : `<div class="stock" style="color:var(--green)"><span class="ic-dot"></span> En stock</div>`);
 
+    const canBuy = !out && p.defaultVariantId;
     return `
-      <article class="card">
+      <article class="card" data-open="${p.id}">
         <div class="card-media">
           ${tag}
           <button class="fav-btn ${isFav ? "on" : ""}" data-fav="${p.id}" aria-label="Favori">
@@ -445,7 +490,7 @@
             <span class="price">${fmt(p.price)}</span>
             ${p.oldPrice ? `<span class="price-old">${fmt(p.oldPrice)}</span>` : ""}
           </div>
-          <button class="add-btn" data-add="${p.id}" ${out ? "disabled" : ""}>
+          <button class="add-btn" data-add="${canBuy ? p.defaultVariantId : ""}" ${canBuy ? "" : "disabled"}>
             ${out ? "INDISPONIBLE" : "AJOUTER AU PANIER"}
           </button>
         </div>
@@ -481,24 +526,27 @@
     empty.style.display = "none";
 
     let total = 0, count = 0;
-    const rows = ids.map((id) => {
-      const p = byId(id); if (!p) return "";
-      const q = store.cart[id];
-      total += p.price * q; count += q;
+    const rows = ids.map((vid) => {
+      const v = variantById(vid); if (!v) return "";
+      const p = v.product;
+      const q = store.cart[vid];
+      total += v.price * q; count += q;
+      const variantLabel = (v.label && v.label !== "Standard") ? `<div class="cart-variant">${v.label}</div>` : "";
       return `
         <div class="cart-item">
           <div class="cart-thumb">${mediaHtml(p)}</div>
           <div class="cart-info">
             <div class="brand">${p.brand}</div>
             <div class="name">${p.name}</div>
-            <div class="price">${fmt(p.price)}</div>
+            ${variantLabel}
+            <div class="price">${fmt(v.price)}</div>
             <div class="qty">
-              <button data-dec="${id}" aria-label="Moins">−</button>
+              <button data-dec="${vid}" aria-label="Moins">−</button>
               <span>${q}</span>
-              <button data-inc="${id}" aria-label="Plus">+</button>
+              <button data-inc="${vid}" aria-label="Plus">+</button>
             </div>
           </div>
-          <button class="cart-remove" data-del="${id}" aria-label="Retirer">
+          <button class="cart-remove" data-del="${vid}" aria-label="Retirer">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
           </button>
         </div>`;
@@ -528,41 +576,51 @@
   }
 
   /* ===== Actions ===== */
-  function addToCart(id) {
-    const p = byId(id);
-    if (!p || p.stock <= 0) return;
-    store.cart[id] = (store.cart[id] || 0) + 1;
+  // Le panier est indexé par variant_id (et non par product_id).
+  function addToCart(vid) {
+    const v = variantById(vid);
+    if (!v || v.stock <= 0) return;
+    const next = (store.cart[vid] || 0) + 1;
+    if (next > v.stock) { toast("Stock maximum atteint"); return; }
+    store.cart[vid] = next;
     save(); renderBadges(); renderCart();
-    toast(`${p.name} ajouté au panier`);
+    const suffix = (v.label && v.label !== "Standard") ? ` (${v.label})` : "";
+    toast(`${v.product.name}${suffix} ajouté au panier`);
   }
-  function changeQty(id, delta) {
-    if (!store.cart[id]) return;
-    store.cart[id] += delta;
-    if (store.cart[id] <= 0) delete store.cart[id];
+  function changeQty(vid, delta) {
+    if (!store.cart[vid]) return;
+    const v = variantById(vid);
+    const next = store.cart[vid] + delta;
+    if (delta > 0 && v && next > v.stock) { toast("Stock maximum atteint"); return; }
+    if (next <= 0) delete store.cart[vid];
+    else store.cart[vid] = next;
     save(); renderBadges(); renderCart();
   }
-  function removeFromCart(id) {
-    delete store.cart[id];
+  function removeFromCart(vid) {
+    delete store.cart[vid];
     save(); renderBadges(); renderCart();
   }
-  function toggleFav(id) {
-    const i = store.favs.indexOf(id);
+  function toggleFav(pid) {
+    const i = store.favs.indexOf(pid);
     if (i >= 0) store.favs.splice(i, 1);
-    else { store.favs.push(id); toast("Ajouté aux favoris"); }
+    else { store.favs.push(pid); toast("Ajouté aux favoris"); }
     save(); renderBadges(); renderGrid(); renderFavs();
+    if (isView("produit") && store.detail.pid) renderProduct();
   }
 
   function checkout() {
     const ids = Object.keys(store.cart);
     if (!ids.length) return;
     let total = 0;
-    const lines = ids.map((id) => {
-      const p = byId(id); const q = store.cart[id];
-      total += p.price * q;
-      return `• ${q} × ${p.brand} ${p.name} — ${fmt(p.price * q)}`;
+    const lines = ids.map((vid) => {
+      const v = variantById(vid); if (!v) return "";
+      const q = store.cart[vid];
+      total += v.price * q;
+      const suffix = (v.label && v.label !== "Standard") ? ` ${v.label}` : "";
+      return `• ${q} × ${v.product.brand} ${v.product.name}${suffix} — ${fmt(v.price * q)}`;
     });
     const msg =
-      "Bonjour portable.sn, je souhaite commander :\n\n" +
+      "Bonjour " + (SETTINGS.store_name || "portable.sn") + ", je souhaite commander :\n\n" +
       lines.join("\n") +
       `\n\nTotal : ${fmt(total)}\n\nMerci de me confirmer la disponibilité et la livraison.`;
     window.open(`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}`, "_blank");
@@ -575,6 +633,137 @@
     if (view === "panier") renderCart();
     if (view === "favoris") renderFavs();
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function isView(name) { const el = $("#view-" + name); return el && el.classList.contains("active"); }
+  function currentView() {
+    const v = $$(".view").find((s) => s.classList.contains("active"));
+    return v ? v.id.replace("view-", "") : "accueil";
+  }
+
+  /* ===== Fiche produit ===== */
+  function openProduct(pid) {
+    const p = byId(pid); if (!p) return;
+    if (!isView("produit")) store.prevView = currentView();
+    const def = variantById(p.defaultVariantId) || p.variants[0] || {};
+    store.detail = {
+      pid, color: def.color || null, storage: def.storage || null,
+      variantId: def.id || null, img: p.images[0] || null,
+    };
+    renderProduct();
+    go("produit");
+  }
+
+  // Résout la variante affichée à partir de la sélection (couleur/capacité ou modèle).
+  function resolveVariant(p) {
+    const colors = [...new Set(p.variants.map((v) => v.color).filter(Boolean))];
+    const storages = [...new Set(p.variants.map((v) => v.storage).filter(Boolean))];
+    if (colors.length || storages.length) {
+      return p.variants.find((v) =>
+               (!colors.length || v.color === store.detail.color) &&
+               (!storages.length || v.storage === store.detail.storage))
+          || p.variants.find((v) => (!colors.length || v.color === store.detail.color))
+          || p.variants[0];
+    }
+    return p.variants.find((v) => v.id === store.detail.variantId) || p.variants[0];
+  }
+
+  function selectColor(c) {
+    const p = byId(store.detail.pid); if (!p) return;
+    store.detail.color = c;
+    const storagesForColor = [...new Set(p.variants.filter((v) => v.color === c).map((v) => v.storage).filter(Boolean))];
+    if (storagesForColor.length && !storagesForColor.includes(store.detail.storage)) store.detail.storage = storagesForColor[0];
+    renderProduct();
+  }
+  function selectStorage(s) { store.detail.storage = s; renderProduct(); }
+  function selectModel(vid) {
+    const v = variantById(vid); if (!v) return;
+    store.detail.variantId = vid; store.detail.color = v.color; store.detail.storage = v.storage;
+    renderProduct();
+  }
+
+  function renderProduct() {
+    const p = byId(store.detail.pid); if (!p) return;
+    const v = resolveVariant(p) || {};
+    store.detail.variantId = v.id || null;
+    const isFav = store.favs.includes(p.id);
+    const out = !(v.stock > 0);
+    const discount = v.oldPrice ? Math.round((1 - v.price / v.oldPrice) * 100) : 0;
+
+    // Galerie
+    const cur = store.detail.img && p.images.includes(store.detail.img) ? store.detail.img : (p.images[0] || null);
+    const mainHtml = cur
+      ? `<img id="pd-main-img" src="${cur}" alt="${p.brand} ${p.name}" onerror="this.outerHTML=window.psnPlaceholder('${p.category}')">`
+      : `<div class="pd-main-ph">${mediaSvg(p.category)}</div>`;
+    const thumbs = p.images.length > 1
+      ? `<div class="pd-thumbs">${p.images.map((u) =>
+          `<button class="pd-thumb ${u === cur ? "active" : ""}" data-thumb="${u}"><img src="${u}" alt="" loading="lazy" onerror="this.style.opacity=.3"></button>`).join("")}</div>`
+      : "";
+
+    // Sélecteurs de variantes (couleur / capacité, ou modèle générique)
+    const colors = [...new Set(p.variants.map((x) => x.color).filter(Boolean))];
+    const storages = [...new Set(p.variants.map((x) => x.storage).filter(Boolean))];
+    let selectors = "";
+    if (colors.length) {
+      selectors += `<div class="vgroup"><div class="vlabel">Couleur</div><div class="vchips">` +
+        colors.map((c) => `<button class="vchip ${c === store.detail.color ? "active" : ""}" data-vcolor="${c}">${c}</button>`).join("") +
+        `</div></div>`;
+    }
+    if (storages.length) {
+      const avail = colors.length
+        ? new Set(p.variants.filter((x) => x.color === store.detail.color).map((x) => x.storage))
+        : new Set(storages);
+      selectors += `<div class="vgroup"><div class="vlabel">Capacité</div><div class="vchips">` +
+        storages.map((s) => {
+          const ok = avail.has(s);
+          return `<button class="vchip ${s === store.detail.storage ? "active" : ""} ${ok ? "" : "off"}" ${ok ? `data-vstorage="${s}"` : "disabled"}>${s}</button>`;
+        }).join("") + `</div></div>`;
+    }
+    if (!colors.length && !storages.length && p.variants.length > 1) {
+      selectors += `<div class="vgroup"><div class="vlabel">Modèle</div><div class="vchips">` +
+        p.variants.map((x) => `<button class="vchip ${x.id === v.id ? "active" : ""}" data-vmodel="${x.id}">${x.label || "Variante"}</button>`).join("") +
+        `</div></div>`;
+    }
+
+    const stockHtml = out
+      ? `<div class="stock out"><span class="ic-dot"></span> Rupture de stock</div>`
+      : (v.stock <= 5
+          ? `<div class="stock"><span class="ic-dot"></span> ${v.stock} en stock</div>`
+          : `<div class="stock" style="color:var(--green)"><span class="ic-dot"></span> En stock</div>`);
+    let badge = "";
+    if (discount > 0) badge = `<span class="tag promo">-${discount}%</span>`;
+    else if (p.tag === "hot") badge = `<span class="tag hot">HOT</span>`;
+    const rating = p.ratingCount > 0
+      ? `<div class="pd-rating">★ ${Number(p.rating).toFixed(1)} <span>(${p.ratingCount})</span></div>` : "";
+
+    $("#view-produit").innerHTML = `
+      <button class="pd-back" data-back aria-label="Retour">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        Retour
+      </button>
+      <div class="pd-gallery">
+        <div class="pd-main">${badge}${mainHtml}</div>
+        ${thumbs}
+      </div>
+      <div class="pd-info">
+        <div class="brand">${p.brand}</div>
+        <h1 class="pd-name">${p.name}</h1>
+        ${rating}
+        <div class="pd-price-row">
+          <span class="pd-price">${fmt(v.price || p.price)}</span>
+          ${v.oldPrice ? `<span class="pd-old">${fmt(v.oldPrice)}</span>` : ""}
+        </div>
+        ${stockHtml}
+        ${selectors}
+        ${p.description ? `<p class="pd-desc">${p.description}</p>` : ""}
+        <div class="pd-actions">
+          <button class="add-btn pd-add" data-add="${out ? "" : v.id}" ${out ? "disabled" : ""}>
+            ${out ? "INDISPONIBLE" : "AJOUTER AU PANIER"}
+          </button>
+          <button class="pd-fav ${isFav ? "on" : ""}" data-fav="${p.id}" aria-label="Favori">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="${isFav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/></svg>
+          </button>
+        </div>
+      </div>`;
   }
 
   /* ===== Toast ===== */
@@ -590,13 +779,21 @@
   /* ===== Écouteurs ===== */
   // Délégation de clics globale
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-add],[data-fav],[data-inc],[data-dec],[data-del],[data-go],[data-cat],#checkout");
+    const t = e.target.closest(
+      "[data-add],[data-fav],[data-inc],[data-dec],[data-del],[data-go],[data-cat]," +
+      "[data-open],[data-back],[data-vcolor],[data-vstorage],[data-vmodel],[data-thumb],#checkout");
     if (!t) return;
     if (t.dataset.add) addToCart(t.dataset.add);
     else if (t.dataset.fav) toggleFav(t.dataset.fav);
     else if (t.dataset.inc) changeQty(t.dataset.inc, +1);
     else if (t.dataset.dec) changeQty(t.dataset.dec, -1);
     else if (t.dataset.del) removeFromCart(t.dataset.del);
+    else if (t.dataset.vcolor) selectColor(t.dataset.vcolor);
+    else if (t.dataset.vstorage) selectStorage(t.dataset.vstorage);
+    else if (t.dataset.vmodel) selectModel(t.dataset.vmodel);
+    else if (t.dataset.thumb) { store.detail.img = t.dataset.thumb; renderProduct(); }
+    else if (t.dataset.open) openProduct(t.dataset.open);
+    else if (t.hasAttribute("data-back")) go(store.prevView || "accueil");
     else if (t.dataset.go) go(t.dataset.go);
     else if (t.dataset.cat) { store.cat = t.dataset.cat; renderCats(); renderGrid(); go("accueil"); }
     else if (t.id === "checkout") checkout();
@@ -625,23 +822,36 @@
 
   /* ===== Mapping d'un produit Supabase vers la forme attendue par l'UI ===== */
   function mapProduct(p) {
-    const variants = (p.variants || []).filter((v) => v.is_active).sort((a, b) => a.price - b.price);
-    const dv = variants[0] || (p.variants || [])[0] || {};
-    const imgs = (p.images || []).slice().sort((a, b) =>
-      (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || (a.position - b.position));
-    const cover = (imgs[0] && imgs[0].url) || p.image_url || null;
+    const variants = (p.variants || [])
+      .filter((v) => v.is_active)
+      .map((v) => ({
+        id: v.id, label: v.label, color: v.color, storage: v.storage,
+        attributes: v.attributes || {}, price: v.price,
+        oldPrice: v.old_price || null, stock: v.stock_actuel ?? 0,
+      }))
+      .sort((a, b) => a.price - b.price);
+    const images = (p.images || []).slice()
+      .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || (a.position - b.position))
+      .map((i) => i.url).filter(Boolean);
+    const def = variants.find((v) => v.stock > 0) || variants[0] || {};
+    const cover = images[0] || p.image_url || null;
     return {
       id: p.id,
       slug: p.slug,
       brand: p.brand || "",
       name: p.name,
-      price: p.prix_base ?? dv.price ?? 0,
-      oldPrice: dv.old_price || null,
-      stock: p.stock_total ?? dv.stock_actuel ?? 0,
+      description: p.description || "",
+      price: p.prix_base ?? def.price ?? 0,
+      oldPrice: def.oldPrice || null,
+      stock: p.stock_total ?? def.stock ?? 0,
       tag: p.is_hot ? "hot" : null,
       category: p.category ? p.category.name : null,
       image: cover,
-      variantId: dv.id || null, // requis par le tunnel de commande (étape 4)
+      images,
+      variants,
+      defaultVariantId: def.id || null,
+      rating: p.rating_avg || 0,
+      ratingCount: p.rating_count || 0,
     };
   }
 
@@ -659,14 +869,18 @@
     ZONES = zones || [];
 
     const { data: prods, error } = await sb.from("products")
-      .select("id,slug,name,brand,is_hot,prix_base,stock_total,image_url," +
+      .select("id,slug,name,brand,description,is_hot,prix_base,stock_total,rating_avg,rating_count,image_url," +
               "category:categories(name)," +
-              "variants:product_variants(id,price,old_price,stock_actuel,is_active,position)," +
+              "variants:product_variants(id,label,color,storage,attributes,price,old_price,stock_actuel,is_active,position)," +
               "images:product_images(url,position,is_primary)")
       .eq("is_active", true)
       .order("created_at", { ascending: true });
     if (error) throw error;
     PRODUCTS = (prods || []).map(mapProduct);
+
+    // Index global des variantes (résolution panier + fiche produit)
+    VARIANTS = {};
+    PRODUCTS.forEach((p) => p.variants.forEach((v) => { VARIANTS[v.id] = { ...v, product: p }; }));
   }
 
   /* ===== Démarrage ===== */
