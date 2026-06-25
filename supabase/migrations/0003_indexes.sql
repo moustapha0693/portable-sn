@@ -21,6 +21,7 @@ create index idx_orders_user         on public.orders(user_id);
 create index idx_orders_status       on public.orders(status);
 create index idx_orders_created      on public.orders(created_at desc);
 create index idx_orders_coupon       on public.orders(coupon_id);
+create index idx_orders_delivery_zone on public.orders(delivery_zone_id);
 create index idx_orders_phone_recent on public.orders(customer_phone, created_at desc); -- anti-spam RPC
 create index idx_order_items_order   on public.order_items(order_id);
 create index idx_order_items_variant on public.order_items(variant_id);
@@ -34,3 +35,4 @@ create index idx_reviews_user        on public.reviews(user_id);
 create index idx_reviews_order       on public.reviews(order_id);
 create index idx_osh_order           on public.order_status_history(order_id);
 create index idx_banners_active      on public.banners(is_active, position);
+create index idx_delivery_zones_active on public.delivery_zones(is_active, position);

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0002_tables.sql — Tables (15)
+-- 0002_tables.sql — Tables (16)
 --
 -- Dépendances : 0001 (types ENUM : order_status, stock_movement_type, discount_type).
 -- Les tables sont créées dans l'ordre des clés étrangères (référencé avant référent).
@@ -143,6 +143,17 @@ create table public.coupons (
   constraint dates_valides  check (ends_at is null or starts_at is null or ends_at > starts_at)
 );
 
+-- ---- 9b. delivery_zones (zones de livraison par région) -------------------
+create table public.delivery_zones (
+  id         bigint generated always as identity primary key,
+  name       text not null unique,
+  fee        integer not null default 0 check (fee >= 0),  -- frais de livraison (FCFA)
+  position   int not null default 0,                       -- ordre d'affichage
+  is_active  boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- ---- 10. orders -----------------------------------------------------------
 create table public.orders (
   id               uuid primary key default gen_random_uuid(),
@@ -158,6 +169,7 @@ create table public.orders (
   total            integer not null default 0 check (total >= 0),
   currency         text not null default 'FCFA',
   coupon_id        bigint references public.coupons(id) on delete set null,
+  delivery_zone_id bigint references public.delivery_zones(id) on delete set null,
   channel          text not null default 'web',     -- 'web' | 'whatsapp'
   note             text,
   created_at       timestamptz not null default now(),

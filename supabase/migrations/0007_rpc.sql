@@ -11,14 +11,18 @@
 --    (gère les doublons et évite les deadlocks) ;
 --  - relit les prix EN BASE (le client ne fixe jamais un prix) ;
 --  - vérifie le stock et décrémente via stock_movements ;
+--  - calcule les frais de livraison depuis delivery_zones (zone choisie),
+--    figés en snapshot dans orders.delivery_fee + orders.delivery_zone_id ;
 --  - valide/calcule un éventuel coupon ; calcule le total côté serveur.
---  p_items : [{ "variant_id": "uuid", "quantity": 2 }, ...]
+--  p_items            : [{ "variant_id": "uuid", "quantity": 2 }, ...]
+--  p_delivery_zone_id : id de la zone de livraison (delivery_zones), ou null.
 -- ============================================================================
 create or replace function public.passer_commande(
   p_customer_name    text,
   p_customer_phone   text,
   p_customer_address text,
   p_items            jsonb,
+  p_delivery_zone_id bigint default null,
   p_coupon_code      text default null,
   p_note             text default null,
   p_channel          text default 'web'
@@ -28,6 +32,7 @@ declare
   v_order       public.orders;
   v_variant     public.product_variants;
   v_coupon      public.coupons;
+  v_zone        public.delivery_zones;
   v_line        record;
   v_qty         integer;
   v_subtotal    integer := 0;
@@ -63,11 +68,18 @@ begin
     raise exception 'Trop de commandes en peu de temps. Réessayez plus tard.';
   end if;
 
-  -- 3. Frais de livraison depuis settings
-  select delivery_fee, free_delivery_threshold
-    into v_delivery, v_free_thresh
-  from public.settings where id = 1;
-  v_delivery := coalesce(v_delivery, 0);
+  -- 3. Frais de livraison : depuis la zone choisie (snapshot figé dans orders).
+  --    À défaut de zone, repli sur le forfait global de settings.
+  select free_delivery_threshold into v_free_thresh from public.settings where id = 1;
+  if p_delivery_zone_id is not null then
+    select * into v_zone from public.delivery_zones where id = p_delivery_zone_id;
+    if not found or not v_zone.is_active then
+      raise exception 'Zone de livraison invalide.';
+    end if;
+    v_delivery := v_zone.fee;
+  else
+    select coalesce(delivery_fee, 0) into v_delivery from public.settings where id = 1;
+  end if;
 
   -- 4. Référence définitive AVANT insertion (évite la collision sur 'TMP')
   v_ref := 'PSN-' || to_char(now(), 'YYYY') || '-'
@@ -75,10 +87,10 @@ begin
 
   insert into public.orders (reference, user_id, customer_name, customer_phone,
                              customer_address, status, subtotal, discount,
-                             delivery_fee, total, channel, note)
+                             delivery_fee, total, delivery_zone_id, channel, note)
   values (v_ref, v_uid, trim(p_customer_name), trim(p_customer_phone),
           nullif(trim(coalesce(p_customer_address, '')), ''), 'en_attente',
-          0, 0, v_delivery, 0, coalesce(p_channel, 'web'), p_note)
+          0, 0, v_delivery, 0, p_delivery_zone_id, coalesce(p_channel, 'web'), p_note)
   returning * into v_order;
 
   -- 5. Lignes agrégées par variante, verrouillées dans un ordre déterministe
@@ -180,5 +192,5 @@ begin
   return v_order;
 end; $$;
 
-grant execute on function public.passer_commande(text,text,text,jsonb,text,text,text)
+grant execute on function public.passer_commande(text,text,text,jsonb,bigint,text,text,text)
   to anon, authenticated;

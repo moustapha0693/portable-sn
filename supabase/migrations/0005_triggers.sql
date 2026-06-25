@@ -21,6 +21,8 @@ create trigger trg_orders_updated    before update on public.orders
   for each row execute function public.set_updated_at();
 create trigger trg_coupons_updated   before update on public.coupons
   for each row execute function public.set_updated_at();
+create trigger trg_delivery_zones_updated before update on public.delivery_zones
+  for each row execute function public.set_updated_at();
 
 create trigger trg_stock_movement after insert on public.stock_movements
   for each row execute function public.apply_stock_movement();

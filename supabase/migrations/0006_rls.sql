@@ -17,6 +17,7 @@ alter table public.product_images       enable row level security;
 alter table public.profiles             enable row level security;
 alter table public.favorites            enable row level security;
 alter table public.coupons              enable row level security;
+alter table public.delivery_zones       enable row level security;
 alter table public.orders               enable row level security;
 alter table public.stock_movements      enable row level security;
 alter table public.coupon_redemptions   enable row level security;
@@ -87,6 +88,12 @@ create policy favorites_write  on public.favorites for all to authenticated
 
 -- coupons : non exposés au public (validés via RPC), gérés par admin
 create policy coupons_admin on public.coupons for all to authenticated
+  using ((select public.is_admin())) with check ((select public.is_admin()));
+
+-- delivery_zones : lecture publique des zones actives, écriture admin
+create policy delivery_zones_read  on public.delivery_zones for select to anon, authenticated
+  using (is_active or (select public.is_admin()));
+create policy delivery_zones_admin on public.delivery_zones for all to authenticated
   using ((select public.is_admin())) with check ((select public.is_admin()));
 
 -- stock_movements : admin uniquement (écritures aussi via RPC/triggers en definer)
