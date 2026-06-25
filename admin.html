@@ -274,10 +274,9 @@
             <button class="btn-danger btn-sm" data-action="delete-image" data-id="${im.id}">Suppr.</button>
           </div>`).join("")}</div>
         <div class="section-title" style="margin-top:14px">Ajouter des photos</div>
-        <div class="field"><input id="ph1" type="url" placeholder="URL photo 1 (https://… ou data:image/…)" /></div>
-        <div class="field"><input id="ph2" type="url" placeholder="URL photo 2" /></div>
-        <div class="field"><input id="ph3" type="url" placeholder="URL photo 3" /></div>
-        <button class="btn btn-line btn-sm" data-action="add-photos">Ajouter les photos</button>`;
+        <p class="hint">Téléverse les photos du produit (ex. devant, dos, côté). 3 recommandées.</p>
+        <div class="field"><input id="ph-files" type="file" accept="image/*" multiple /></div>
+        <button class="btn btn-line btn-sm" data-action="upload-photos">Téléverser les photos</button>`;
     }
 
     $("#modal-card").innerHTML = `
@@ -395,16 +394,28 @@
     toast("Variante supprimée."); await loadProducts(); renderEditor();
   }
 
-  async function addPhotos() {
-    const urls = ["#ph1", "#ph2", "#ph3"].map((s) => ($(s) ? $(s).value.trim() : "")).filter(Boolean);
-    if (!urls.length) return toast("Indique au moins une URL de photo.");
+  async function uploadPhotos() {
+    const input = $("#ph-files");
+    const files = input && input.files ? [...input.files] : [];
+    if (!files.length) return toast("Choisis une ou plusieurs photos.");
+    const btn = document.querySelector('[data-action="upload-photos"]');
+    if (btn) { btn.disabled = true; btn.textContent = "Téléversement…"; }
     const existing = (state.current.images || []).length;
-    const rows = urls.map((url, i) => ({
-      product_id: state.current.id, url, position: existing + i + 1, is_primary: existing === 0 && i === 0,
-    }));
-    const { error } = await sb.from("product_images").insert(rows);
-    if (error) return toast("Erreur : " + error.message);
-    toast(urls.length > 1 ? urls.length + " photos ajoutées." : "Photo ajoutée.");
+    let ok = 0;
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const ext = (f.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      const path = `${state.current.id}/${Date.now()}-${i}.${ext}`;
+      const up = await sb.storage.from("produits").upload(path, f, { cacheControl: "3600", upsert: false });
+      if (up.error) { toast("Échec de l'upload : " + up.error.message); continue; }
+      const url = sb.storage.from("produits").getPublicUrl(path).data.publicUrl;
+      const ins = await sb.from("product_images").insert({
+        product_id: state.current.id, url, position: existing + ok + 1, is_primary: existing === 0 && ok === 0,
+      });
+      if (ins.error) { toast("Erreur : " + ins.error.message); continue; }
+      ok++;
+    }
+    toast(ok + " photo(s) téléversée(s).");
     await loadProducts(); renderEditor();
   }
   async function setPrimary(imgId) {
@@ -414,6 +425,12 @@
     await loadProducts(); renderEditor();
   }
   async function deleteImage(imgId) {
+    const img = (state.current.images || []).find((i) => String(i.id) === String(imgId));
+    if (img && img.url) {
+      const marker = "/storage/v1/object/public/produits/";
+      const k = img.url.indexOf(marker);
+      if (k >= 0) { try { await sb.storage.from("produits").remove([decodeURIComponent(img.url.slice(k + marker.length))]); } catch (e) {} }
+    }
     const { error } = await sb.from("product_images").delete().eq("id", imgId);
     if (error) return toast("Erreur : " + error.message);
     toast("Image supprimée."); await loadProducts(); renderEditor();
@@ -432,7 +449,7 @@
     else if (a === "delete-product") deleteProduct();
     else if (a === "save-variant") saveVariant(id);
     else if (a === "delete-variant") deleteVariant(id);
-    else if (a === "add-photos") addPhotos();
+    else if (a === "upload-photos") uploadPhotos();
     else if (a === "set-primary") setPrimary(id);
     else if (a === "delete-image") deleteImage(id);
   });
