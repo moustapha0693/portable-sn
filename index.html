@@ -332,46 +332,22 @@
 
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function () {
   "use strict";
 
-  /* ===== Configuration ===== */
-  // Numéro WhatsApp de la boutique (format international, sans + ni espaces).
-  const WHATSAPP = "221770000000";
+  /* ===== Configuration Supabase ===== */
+  const SUPABASE_URL = "https://uxvalsjtnuhbauerylro.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_fSoIxKIDRGtWHw-u7h2H4g_gIeaO5Yk"; // clé publique (anon)
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  /* ===== Catalogue produits =====
-     Modifie/ajoute simplement des objets ici pour gérer le stock. */
-  const PRODUCTS = [
-    // --- Téléphones ---
-    { id: "s24u",  brand: "Samsung", name: "Galaxy S24 Ultra", price: 580000, stock: 2,  tag: "hot",  category: "Téléphones" },
-    { id: "xm14",  brand: "Xiaomi",  name: "Xiaomi 14",        price: 320000, stock: 8,               category: "Téléphones" },
-    { id: "spk20", brand: "Tecno",   name: "Spark 20 Pro",     price: 110000, stock: 12, oldPrice: 129000, category: "Téléphones" },
-    { id: "a55",   brand: "Samsung", name: "Galaxy A55",       price: 215000, stock: 5,  oldPrice: 231000, category: "Téléphones" },
-    { id: "ip15",  brand: "Apple",   name: "iPhone 15",        price: 690000, stock: 3,  tag: "hot",  category: "Téléphones" },
-    { id: "redn13",brand: "Xiaomi",  name: "Redmi Note 13",    price: 145000, stock: 0,               category: "Téléphones" },
-    { id: "ip14",  brand: "Apple",   name: "iPhone 14",        price: 575000, stock: 4,  oldPrice: 620000, category: "Téléphones" },
-    { id: "camon", brand: "Tecno",   name: "Camon 30",         price: 135000, stock: 9,               category: "Téléphones" },
-    { id: "a05",   brand: "Samsung", name: "Galaxy A05",       price: 72000,  stock: 20,              category: "Téléphones" },
-    { id: "poco",  brand: "Xiaomi",  name: "Poco X6 Pro",      price: 235000, stock: 6,  tag: "hot",  category: "Téléphones" },
-
-    // --- Accessoires ---
-    { id: "coque",   brand: "Spigen", name: "Coque Galaxy S24 Ultra", price: 9000,  stock: 30,              category: "Accessoires" },
-    { id: "chargeur",brand: "Oraimo", name: "Chargeur rapide 33W",    price: 12000, stock: 25,              category: "Accessoires" },
-    { id: "freepods",brand: "Oraimo", name: "Écouteurs FreePods 4",   price: 18000, stock: 15, oldPrice: 22000, category: "Accessoires" },
-    { id: "cable",   brand: "Anker",  name: "Câble USB-C 1m",         price: 4500,  stock: 40,              category: "Accessoires" },
-
-    // --- Électronique ---
-    { id: "powerbank", brand: "Oraimo", name: "Powerbank 20000mAh",     price: 25000, stock: 12, tag: "hot", category: "Électronique" },
-    { id: "band8",     brand: "Xiaomi", name: "Smart Band 8",           price: 32000, stock: 10,             category: "Électronique" },
-    { id: "jblgo",     brand: "JBL",    name: "Enceinte Bluetooth Go 3",price: 28000, stock: 8,              category: "Électronique" },
-
-    // --- Divers ---
-    { id: "verre",   brand: "Universel", name: "Verre trempé universel", price: 2000, stock: 50,            category: "Divers" },
-    { id: "support", brand: "Universel", name: "Support voiture",        price: 6500, stock: 18,            category: "Divers" },
-  ];
-
-  const CATEGORIES = ["Tous", "Téléphones", "Accessoires", "Électronique", "Divers"];
+  /* ===== Données chargées depuis Supabase ===== */
+  let WHATSAPP   = "221770000000"; // valeur par défaut, surchargée par settings
+  let PRODUCTS   = [];             // catalogue (products + variante par défaut + image)
+  let CATEGORIES = ["Tous"];       // puces de catégories
+  let ZONES      = [];             // zones de livraison (pour le tunnel de commande, étape 4)
+  let SETTINGS   = {};             // paramètres globaux (settings)
 
   /* ===== État (persisté dans localStorage) ===== */
   const store = {
@@ -637,15 +613,81 @@
   }, { passive: true });
   fabTop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
 
-  // Liens WhatsApp / contact
-  $("#fab-wa").href = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent("Bonjour portable.sn 👋")}`;
-  $("#contact-phone").href = `https://wa.me/${WHATSAPP}`;
-  $("#contact-phone").textContent = "+" + WHATSAPP.replace(/^(\d{3})(\d{2})(\d{3})(\d{2})(\d{2})$/, "$1 $2 $3 $4 $5");
+  /* ===== Application des paramètres (settings) ===== */
+  function applySettings() {
+    if (SETTINGS.whatsapp_number) WHATSAPP = String(SETTINGS.whatsapp_number).replace(/\D/g, "");
+    if (SETTINGS.color_primary) document.documentElement.style.setProperty("--blue", SETTINGS.color_primary);
+    if (SETTINGS.color_accent)  document.documentElement.style.setProperty("--green", SETTINGS.color_accent);
+    $("#fab-wa").href = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent("Bonjour " + (SETTINGS.store_name || "portable.sn") + " 👋")}`;
+    $("#contact-phone").href = `https://wa.me/${WHATSAPP}`;
+    $("#contact-phone").textContent = "+" + WHATSAPP;
+  }
+
+  /* ===== Mapping d'un produit Supabase vers la forme attendue par l'UI ===== */
+  function mapProduct(p) {
+    const variants = (p.variants || []).filter((v) => v.is_active).sort((a, b) => a.price - b.price);
+    const dv = variants[0] || (p.variants || [])[0] || {};
+    const imgs = (p.images || []).slice().sort((a, b) =>
+      (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || (a.position - b.position));
+    const cover = (imgs[0] && imgs[0].url) || p.image_url || null;
+    return {
+      id: p.id,
+      slug: p.slug,
+      brand: p.brand || "",
+      name: p.name,
+      price: p.prix_base ?? dv.price ?? 0,
+      oldPrice: dv.old_price || null,
+      stock: p.stock_total ?? dv.stock_actuel ?? 0,
+      tag: p.is_hot ? "hot" : null,
+      category: p.category ? p.category.name : null,
+      image: cover,
+      variantId: dv.id || null, // requis par le tunnel de commande (étape 4)
+    };
+  }
+
+  /* ===== Chargement des données depuis Supabase ===== */
+  async function loadCatalog() {
+    const { data: st } = await sb.from("settings").select("*").limit(1).maybeSingle();
+    if (st) SETTINGS = st;
+
+    const { data: cats } = await sb.from("categories")
+      .select("name,position,is_active").eq("is_active", true).order("position");
+    CATEGORIES = ["Tous", ...(cats || []).map((c) => c.name)];
+
+    const { data: zones } = await sb.from("delivery_zones")
+      .select("id,name,fee,position,is_active").eq("is_active", true).order("position");
+    ZONES = zones || [];
+
+    const { data: prods, error } = await sb.from("products")
+      .select("id,slug,name,brand,is_hot,prix_base,stock_total,image_url," +
+              "category:categories(name)," +
+              "variants:product_variants(id,price,old_price,stock_actuel,is_active,position)," +
+              "images:product_images(url,position,is_primary)")
+      .eq("is_active", true)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    PRODUCTS = (prods || []).map(mapProduct);
+  }
 
   /* ===== Démarrage ===== */
-  renderCats();
-  renderGrid();
-  renderBadges();
+  async function init() {
+    applySettings(); // liens WhatsApp par défaut immédiats
+    $("#grid").innerHTML =
+      '<p style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 0">Chargement du catalogue…</p>';
+    try {
+      await loadCatalog();
+      applySettings(); // ré-applique avec les vrais paramètres
+      renderCats();
+      renderGrid();
+      renderBadges();
+    } catch (e) {
+      console.error("Erreur de chargement Supabase:", e);
+      $("#grid").innerHTML =
+        '<p style="grid-column:1/-1;text-align:center;color:var(--red);padding:40px 0">Impossible de charger le catalogue. Vérifie ta connexion puis recharge la page.</p>';
+      renderBadges();
+    }
+  }
+  init();
 })();
 </script>
 </body>
