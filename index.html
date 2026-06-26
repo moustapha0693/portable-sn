@@ -1089,7 +1089,7 @@
               "variants:product_variants(id,label,color,storage,attributes,price,old_price,stock_actuel,is_active,position)," +
               "images:product_images(url,position,is_primary)")
       .eq("is_active", true)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false });
     if (error) throw error;
     PRODUCTS = (prods || []).map(mapProduct);
 
