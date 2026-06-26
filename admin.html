@@ -111,6 +111,7 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; }
   .pslot.empty { border:2px dashed #cbd5e1; background:var(--bg); color:var(--muted); }
   .pslot.empty:hover { border-color:var(--blue); color:var(--blue); }
+  .pslot.uploading { opacity:.6; pointer-events:none; border-color:var(--blue); }
   .pslot-plus { font-size:30px; line-height:1; font-weight:300; }
   .pslot-text { font-size:12px; font-weight:600; margin-top:2px; }
   .pslot.filled { border:2px solid var(--line); }
@@ -353,6 +354,7 @@
 
   /* ===================== Opérations CRUD ===================== */
   async function saveProduct() {
+    const wasNew = !state.current;
     const name = $("#f-name").value.trim();
     if (!name) return toast("Le nom est obligatoire.");
     let slug = $("#f-slug").value.trim() || slugify(name);
@@ -369,9 +371,9 @@
     if (state.current) res = await sb.from("products").update(payload).eq("id", state.current.id).select().single();
     else res = await sb.from("products").insert(payload).select().single();
     if (res.error) return toast("Erreur : " + res.error.message);
-    toast("Produit enregistré.");
     await loadProducts();
-    openEditor(res.data.id); // ré-ouvre en mode édition (permet variantes/images)
+    if (wasNew) { toast("Produit créé — ajoute ses variantes et photos."); openEditor(res.data.id); }
+    else { toast("Produit enregistré ✓"); closeEditor(); }
   }
 
   async function deleteProduct() {
@@ -420,20 +422,24 @@
     toast("Variante supprimée."); await loadProducts(); renderEditor();
   }
 
-  async function uploadSingle(file) {
+  async function uploadSingle(file, slot) {
     if (!state.current || !file) return;
+    if (!/^image\//.test(file.type || "")) return toast("Choisis un fichier image.");
+    if (slot) { slot.classList.add("uploading"); const tx = slot.querySelector(".pslot-text"); if (tx) tx.textContent = "Envoi…"; }
+    toast("Téléversement…");
     const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
     const path = `${state.current.id}/${Date.now()}.${ext}`;
-    toast("Téléversement…");
-    const up = await sb.storage.from("produits").upload(path, file, { cacheControl: "3600", upsert: false });
-    if (up.error) return toast("Échec de l'upload : " + up.error.message);
+    const up = await sb.storage.from("produits").upload(path, file, {
+      cacheControl: "3600", upsert: false, contentType: file.type || undefined,
+    });
+    if (up.error) { console.error("Upload:", up.error); renderEditor(); return toast("Échec de l'upload : " + up.error.message); }
     const url = sb.storage.from("produits").getPublicUrl(path).data.publicUrl;
     const existing = (state.current.images || []).length;
     const ins = await sb.from("product_images").insert({
       product_id: state.current.id, url, position: existing + 1, is_primary: existing === 0,
     });
-    if (ins.error) return toast("Erreur : " + ins.error.message);
-    toast("Photo ajoutée."); await loadProducts(); renderEditor();
+    if (ins.error) { console.error("Insert image:", ins.error); renderEditor(); return toast("Erreur : " + ins.error.message); }
+    toast("Photo ajoutée ✓"); await loadProducts(); renderEditor();
   }
   async function setPrimary(imgId) {
     await sb.from("product_images").update({ is_primary: false }).eq("product_id", state.current.id);
@@ -476,7 +482,7 @@
   document.addEventListener("change", (e) => {
     if (e.target && e.target.classList && e.target.classList.contains("ph-slot-input")) {
       const f = e.target.files && e.target.files[0];
-      if (f) uploadSingle(f);
+      if (f) uploadSingle(f, e.target.closest(".pslot"));
     }
   });
 
