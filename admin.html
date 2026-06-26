@@ -124,6 +124,23 @@
   .pslot-del { position:absolute; top:6px; right:6px; background:rgba(0,0,0,.55); color:#fff;
     width:24px; height:24px; border-radius:999px; font-size:16px; line-height:1; display:grid; place-items:center; }
 
+  .form-section { border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
+  .form-section-title { font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--blue); margin-bottom:12px; }
+  .amount { display:flex; align-items:stretch; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--bg); }
+  .amount input { border:none !important; background:transparent; flex:1; height:42px; }
+  .amount span { padding:0 12px; font-size:13px; font-weight:700; color:var(--muted); border-left:1px solid var(--line); display:flex; align-items:center; }
+  .dropzone { border:2px dashed #cbd5e1; border-radius:12px; padding:22px; text-align:center; cursor:pointer; color:var(--muted); transition:all .15s; }
+  .dropzone:hover, .dropzone.drag { border-color:var(--blue); background:#eff6ff; color:var(--blue); }
+  .dz-plus { font-size:26px; line-height:1; }
+  .dz-text { font-size:14px; font-weight:600; margin-top:4px; }
+  .img-grid { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
+  .img-thumb { position:relative; width:90px; height:90px; border-radius:10px; overflow:hidden; border:2px solid var(--line); background:var(--bg); }
+  .img-thumb.primary { border-color:var(--blue); }
+  .img-thumb img { width:100%; height:100%; object-fit:cover; }
+  .thumb-badge { position:absolute; bottom:4px; left:4px; background:var(--blue); color:#fff; font-size:9px; font-weight:700; padding:2px 5px; border-radius:5px; }
+  .thumb-star { position:absolute; bottom:4px; left:4px; background:rgba(255,255,255,.92); color:#f59e0b; border-radius:5px; font-size:12px; padding:1px 6px; font-weight:700; }
+  .thumb-del { position:absolute; top:4px; right:4px; background:rgba(0,0,0,.55); color:#fff; width:22px; height:22px; border-radius:999px; font-size:15px; line-height:1; display:grid; place-items:center; }
+
   #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); z-index:80;
     background:var(--ink); color:#fff; padding:12px 18px; border-radius:12px; font-size:14px; font-weight:600;
     opacity:0; pointer-events:none; transition:all .25s; max-width:90%; }
@@ -179,7 +196,7 @@
   const slugify = (s) => s.toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
-  const state = { products: [], categories: [], current: null, query: "" };
+  const state = { products: [], categories: [], current: null, query: "", pendingImages: [] };
 
   let toastTimer;
   function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show");
@@ -230,9 +247,9 @@
   }
   async function loadProducts() {
     const { data, error } = await sb.from("products")
-      .select("id,slug,name,brand,description,is_hot,is_active,prix_base,stock_total,image_url," +
+      .select("id,slug,name,brand,description,condition,keywords,is_hot,is_active,prix_base,stock_total,image_url," +
               "category_id,category:categories(name)," +
-              "variants:product_variants(id,label,color,storage,price,old_price,stock_actuel,is_active,position)," +
+              "variants:product_variants(id,label,color,storage,sku,price,old_price,stock_actuel,is_active,position)," +
               "images:product_images(id,url,position,is_primary)")
       .order("created_at", { ascending: true });
     if (error) { toast("Erreur de chargement : " + error.message); return; }
@@ -263,6 +280,7 @@
   /* ===================== Éditeur produit ===================== */
   function openEditor(id) {
     state.current = id ? state.products.find((p) => p.id === id) : null;
+    state.pendingImages = [];
     renderEditor();
     $("#modal").classList.add("show");
   }
@@ -273,63 +291,134 @@
     const isNew = !p;
     const catOpts = state.categories.map((c) =>
       `<option value="${c.id}" ${p && p.category_id === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("");
+    const cond = (p && p.condition) ? p.condition : "Neuf";
+    const condOpts = ["Neuf", "Occasion", "Reconditionné"].map((c) => `<option ${c === cond ? "selected" : ""}>${c}</option>`).join("");
 
-    let variantsHtml = "", imagesHtml = "";
+    // Variantes (produit existant : prix / stock / SKU gérés par variante)
+    let variantsHtml = "";
     if (!isNew) {
-      const vrows = (p.variants || []).sort((a, b) => a.position - b.position).map((v) => variantRow(v)).join("");
+      const vrows = (p.variants || []).slice().sort((a, b) => a.position - b.position).map((v) => variantRow(v)).join("");
       variantsHtml = `
-        <div class="section-title">Variantes</div>
-        ${vrows || '<p class="hint">Aucune variante. Ajoute-en au moins une.</p>'}
-        <div class="sub">${variantRow(null)}</div>`;
-      const imgs = (p.images || []).sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || a.position - b.position);
-      imagesHtml = `
-        <div class="section-title">Photos du produit (${imgs.length}/3)</div>
-        <p class="hint">Clique sur un emplacement pour choisir une photo depuis ta galerie (ex. devant, dos, côté).</p>
-        <div class="photo-slots">
-          ${[0, 1, 2].map((i) => {
-            const im = imgs[i];
-            if (im) return `
-              <div class="pslot filled ${im.is_primary ? "primary" : ""}">
-                <img src="${esc(im.url)}" alt="" onerror="this.style.opacity=.3" />
-                ${im.is_primary
-                  ? '<span class="pslot-badge">Principale</span>'
-                  : `<button class="pslot-star" data-action="set-primary" data-id="${im.id}" title="Définir comme principale">★</button>`}
-                <button class="pslot-del" data-action="delete-image" data-id="${im.id}" title="Supprimer">×</button>
-              </div>`;
-            return `
-              <label class="pslot empty">
-                <input type="file" class="ph-slot-input" accept="image/*" hidden />
-                <span class="pslot-plus">+</span>
-                <span class="pslot-text">Photo ${i + 1}</span>
-              </label>`;
-          }).join("")}
+        <div class="form-section">
+          <div class="form-section-title">Variantes (prix, stock, SKU)</div>
+          ${vrows || '<p class="hint">Aucune variante.</p>'}
+          <div class="sub">${variantRow(null)}</div>
         </div>`;
     }
 
+    // Prix & stock — création de la variante par défaut (nouveau produit)
+    const prixStock = isNew ? `
+      <div class="form-section">
+        <div class="form-section-title">Prix & stock</div>
+        <div class="grid2">
+          <div class="field"><label>Prix *</label>
+            <div class="amount"><input id="f-price" type="number" min="0" placeholder="0" /><span>FCFA</span></div></div>
+          <div class="field"><label>Prix promotionnel</label>
+            <div class="amount"><input id="f-oldprice" type="number" min="0" placeholder="—" /><span>FCFA</span></div></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>Stock / Quantité</label><input id="f-stock" type="number" min="0" placeholder="0" /></div>
+          <div class="field"><label>SKU (code unique)</label><input id="f-sku" placeholder="ex. SAMS-S21P-128" /></div>
+        </div>
+      </div>` : "";
+
     $("#modal-card").innerHTML = `
       <h3>${isNew ? "Nouveau produit" : "Modifier le produit"}</h3>
-      <div class="grid2">
-        <div class="field"><label>Nom *</label><input id="f-name" value="${esc(p ? p.name : "")}" /></div>
-        <div class="field"><label>Marque</label><input id="f-brand" value="${esc(p ? p.brand : "")}" /></div>
+
+      <div class="form-section">
+        <div class="form-section-title">Informations</div>
+        <div class="grid2">
+          <div class="field"><label>Nom *</label><input id="f-name" value="${esc(p ? p.name : "")}" /></div>
+          <div class="field"><label>Marque</label><input id="f-brand" value="${esc(p ? p.brand : "")}" /></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>Catégorie</label><select id="f-cat"><option value="">—</option>${catOpts}</select></div>
+          <div class="field"><label>Slug (auto si vide)</label><input id="f-slug" value="${esc(p ? p.slug : "")}" /></div>
+        </div>
+        <div class="field"><label>Description</label><textarea id="f-desc">${esc(p ? p.description : "")}</textarea></div>
+        <div class="grid2">
+          <div class="field"><label>État du produit</label><select id="f-cond">${condOpts}</select></div>
+          <div class="field"><label>Mots-clés / Tags (SEO)</label><input id="f-keywords" value="${esc(p ? p.keywords : "")}" placeholder="ex. samsung, s21, plus, 5g" /></div>
+        </div>
       </div>
-      <div class="grid2">
-        <div class="field"><label>Catégorie</label><select id="f-cat"><option value="">—</option>${catOpts}</select></div>
-        <div class="field"><label>Slug (auto si vide)</label><input id="f-slug" value="${esc(p ? p.slug : "")}" /></div>
+
+      ${prixStock}
+
+      <div class="form-section">
+        <div class="form-section-title" id="photos-title">Photos${!isNew ? ` (${(p.images || []).length}/3)` : ""}</div>
+        <div class="dropzone" id="dropzone">
+          <input id="f-photos" type="file" accept="image/*" multiple hidden />
+          <div class="dz-plus">⬆</div>
+          <div class="dz-text">Glisse tes photos ici, ou clique pour choisir</div>
+          <div class="hint">Plusieurs photos possibles (ex. devant, dos, côté). 3 recommandées.</div>
+        </div>
+        <div class="img-grid">${photoThumbsHtml()}</div>
       </div>
-      <div class="field"><label>Description</label><textarea id="f-desc">${esc(p ? p.description : "")}</textarea></div>
-      <div class="field"><label>Image de couverture (URL, facultatif)</label><input id="f-image" value="${esc(p ? p.image_url : "")}" /></div>
-      <label class="row-check"><input type="checkbox" id="f-hot" ${p && p.is_hot ? "checked" : ""} /> Produit en vedette (HOT)</label>
-      <label class="row-check"><input type="checkbox" id="f-active" ${!p || p.is_active ? "checked" : ""} /> Visible dans la boutique</label>
-      ${isNew ? '<p class="hint">Enregistre le produit pour pouvoir ajouter ses variantes et images.</p>' : ""}
+
+      <div class="form-section">
+        <label class="row-check"><input type="checkbox" id="f-hot" ${p && p.is_hot ? "checked" : ""} /> Produit en vedette (HOT)</label>
+        <label class="row-check"><input type="checkbox" id="f-active" ${!p || p.is_active ? "checked" : ""} /> Visible dans la boutique</label>
+      </div>
+
       ${variantsHtml}
-      ${imagesHtml}
+
       <div class="modal-actions">
         ${isNew ? "<span></span>" : `<button class="btn btn-danger" data-action="delete-product">Supprimer</button>`}
         <div style="display:flex;gap:10px">
           <button class="btn btn-line" data-action="close-modal">Fermer</button>
-          <button class="btn btn-primary" data-action="save-product">Enregistrer</button>
+          <button class="btn btn-primary" data-action="save-product">${isNew ? "Créer le produit" : "Enregistrer"}</button>
         </div>
       </div>`;
+
+    wireDropzone();
+  }
+
+  function photoThumbsHtml() {
+    if (state.current) {
+      const imgs = (state.current.images || []).slice()
+        .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || a.position - b.position);
+      if (!imgs.length) return '<p class="hint">Aucune photo pour l\'instant.</p>';
+      return imgs.map((im) => `
+        <div class="img-thumb ${im.is_primary ? "primary" : ""}">
+          <img src="${esc(im.url)}" alt="" onerror="this.style.opacity=.3" />
+          ${im.is_primary
+            ? '<span class="thumb-badge">Principale</span>'
+            : `<button class="thumb-star" data-action="set-primary" data-id="${im.id}" title="Définir comme principale">★</button>`}
+          <button class="thumb-del" data-action="delete-image" data-id="${im.id}" title="Supprimer">×</button>
+        </div>`).join("");
+    }
+    if (!state.pendingImages.length) return '<p class="hint">Aucune photo sélectionnée.</p>';
+    return state.pendingImages.map((f, i) => `
+      <div class="img-thumb ${i === 0 ? "primary" : ""}">
+        <img src="${URL.createObjectURL(f)}" alt="" />
+        ${i === 0 ? '<span class="thumb-badge">Principale</span>' : ""}
+        <button class="thumb-del" data-action="remove-pending" data-id="${i}" title="Retirer">×</button>
+      </div>`).join("");
+  }
+
+  function wireDropzone() {
+    const dz = $("#dropzone"); if (!dz) return;
+    const input = $("#f-photos");
+    dz.addEventListener("click", () => input.click());
+    input.addEventListener("change", () => { if (input.files && input.files.length) handlePhotoFiles(input.files); });
+    ["dragenter", "dragover"].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add("drag"); }));
+    ["dragleave", "dragend"].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove("drag"); }));
+    dz.addEventListener("drop", (e) => { e.preventDefault(); dz.classList.remove("drag");
+      if (e.dataTransfer.files && e.dataTransfer.files.length) handlePhotoFiles(e.dataTransfer.files); });
+  }
+
+  function handlePhotoFiles(fileList) {
+    const files = [...fileList].filter((f) => /^image\//.test(f.type || ""));
+    if (!files.length) return toast("Choisis des fichiers image.");
+    if (state.current) uploadFiles(files);
+    else { state.pendingImages.push(...files); renderPhotoGrid(); }
+  }
+
+  // Rafraîchit uniquement la grille de photos (préserve les champs du formulaire)
+  function renderPhotoGrid() {
+    const g = $(".img-grid"); if (g) g.innerHTML = photoThumbsHtml();
+    const t = $("#photos-title");
+    if (t && state.current) t.textContent = `Photos (${(state.current.images || []).length}/3)`;
   }
 
   function variantRow(v) {
@@ -343,6 +432,7 @@
           <input class="v-price" type="number" placeholder="Prix" value="${v ? v.price : ""}" />
           <input class="v-old" type="number" placeholder="Prix barré" value="${v && v.old_price != null ? v.old_price : ""}" />
           <input class="v-stock" type="number" placeholder="Stock" value="${v ? v.stock_actuel : ""}" />
+          <input class="v-sku f-full" placeholder="SKU (code unique)" value="${esc(v ? v.sku : "")}" />
         </div>
         <label class="row-check"><input type="checkbox" class="v-active" ${!v || v.is_active ? "checked" : ""}/> Variante active</label>
         <div class="var-actions">
@@ -353,33 +443,69 @@
   }
 
   /* ===================== Opérations CRUD ===================== */
+  function numVal(sel) { const x = $(sel) ? $(sel).value.trim() : ""; return x === "" ? null : Number(x); }
+
   async function saveProduct() {
     const wasNew = !state.current;
     const name = $("#f-name").value.trim();
     if (!name) return toast("Le nom est obligatoire.");
-    let slug = $("#f-slug").value.trim() || slugify(name);
+    const slug = $("#f-slug").value.trim() || slugify(name);
     const payload = {
       name, slug,
       brand: $("#f-brand").value.trim() || null,
       category_id: $("#f-cat").value ? Number($("#f-cat").value) : null,
       description: $("#f-desc").value.trim() || null,
-      image_url: $("#f-image").value.trim() || null,
+      condition: $("#f-cond").value || "Neuf",
+      keywords: $("#f-keywords").value.trim() || null,
       is_hot: $("#f-hot").checked,
       is_active: $("#f-active").checked,
     };
-    let res;
-    if (state.current) res = await sb.from("products").update(payload).eq("id", state.current.id).select().single();
-    else res = await sb.from("products").insert(payload).select().single();
-    if (res.error) return toast("Erreur : " + res.error.message);
-    await loadProducts();
-    if (wasNew) { toast("Produit créé — ajoute ses variantes et photos."); openEditor(res.data.id); }
-    else { toast("Produit enregistré ✓"); closeEditor(); }
+    const btn = document.querySelector('[data-action="save-product"]');
+    const reset = () => { if (btn) { btn.disabled = false; btn.textContent = wasNew ? "Créer le produit" : "Enregistrer"; } };
+
+    if (wasNew) {
+      const price = numVal("#f-price"), old = numVal("#f-oldprice");
+      const stock = numVal("#f-stock") ?? 0, sku = $("#f-sku").value.trim() || null;
+      if (price == null || price < 0) return toast("Indique un prix valide.");
+      if (old != null && old <= price) return toast("Le prix promo doit être supérieur au prix.");
+      if (btn) { btn.disabled = true; btn.textContent = "Création…"; }
+      const ins = await sb.from("products").insert(payload).select().single();
+      if (ins.error) { reset(); return toast("Erreur : " + ins.error.message); }
+      const pid = ins.data.id;
+      const vi = await sb.from("product_variants").insert({
+        product_id: pid, label: "Standard", sku, price, old_price: old,
+        stock_initial: stock, stock_actuel: stock, is_active: true,
+      });
+      if (vi.error) toast("Produit créé, variante en erreur : " + vi.error.message);
+      let i = 0;
+      for (const f of state.pendingImages) {
+        const ext = (f.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+        const path = `${pid}/${Date.now()}-${i}.${ext}`;
+        const up = await sb.storage.from("produits").upload(path, f, { cacheControl: "3600", upsert: false, contentType: f.type || undefined });
+        if (up.error) { toast("Une photo n'a pas pu être envoyée."); continue; }
+        const url = sb.storage.from("produits").getPublicUrl(path).data.publicUrl;
+        await sb.from("product_images").insert({ product_id: pid, url, position: i + 1, is_primary: i === 0 });
+        i++;
+      }
+      state.pendingImages = [];
+      toast("Produit créé ✓"); await loadProducts(); openEditor(pid);
+    } else {
+      if (btn) { btn.disabled = true; btn.textContent = "Enregistrement…"; }
+      const upd = await sb.from("products").update(payload).eq("id", state.current.id);
+      if (upd.error) { reset(); return toast("Erreur : " + upd.error.message); }
+      await loadProducts(); toast("Produit enregistré ✓"); closeEditor();
+    }
   }
 
   async function deleteProduct() {
     if (!state.current) return;
     if (!confirm("Supprimer définitivement ce produit, ses variantes et images ?")) return;
-    const { error } = await sb.from("products").delete().eq("id", state.current.id);
+    const pid = state.current.id;
+    try {
+      const { data: files } = await sb.storage.from("produits").list(pid);
+      if (files && files.length) await sb.storage.from("produits").remove(files.map((f) => `${pid}/${f.name}`));
+    } catch (e) { console.error("Purge Storage:", e); }
+    const { error } = await sb.from("products").delete().eq("id", pid);
     if (error) return toast("Erreur : " + error.message);
     toast("Produit supprimé."); closeEditor(); await loadProducts();
   }
@@ -394,6 +520,7 @@
       label: row.querySelector(".v-label").value.trim() || "Standard",
       color: row.querySelector(".v-color").value.trim() || null,
       storage: row.querySelector(".v-storage").value.trim() || null,
+      sku: row.querySelector(".v-sku").value.trim() || null,
       price, old_price: old,
       is_active: row.querySelector(".v-active").checked,
     };
@@ -422,30 +549,28 @@
     toast("Variante supprimée."); await loadProducts(); renderEditor();
   }
 
-  async function uploadSingle(file, slot) {
-    if (!state.current || !file) return;
-    if (!/^image\//.test(file.type || "")) return toast("Choisis un fichier image.");
-    if (slot) { slot.classList.add("uploading"); const tx = slot.querySelector(".pslot-text"); if (tx) tx.textContent = "Envoi…"; }
+  async function uploadFiles(files) {
+    if (!state.current) return;
     toast("Téléversement…");
-    const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-    const path = `${state.current.id}/${Date.now()}.${ext}`;
-    const up = await sb.storage.from("produits").upload(path, file, {
-      cacheControl: "3600", upsert: false, contentType: file.type || undefined,
-    });
-    if (up.error) { console.error("Upload:", up.error); renderEditor(); return toast("Échec de l'upload : " + up.error.message); }
-    const url = sb.storage.from("produits").getPublicUrl(path).data.publicUrl;
-    const existing = (state.current.images || []).length;
-    const ins = await sb.from("product_images").insert({
-      product_id: state.current.id, url, position: existing + 1, is_primary: existing === 0,
-    });
-    if (ins.error) { console.error("Insert image:", ins.error); renderEditor(); return toast("Erreur : " + ins.error.message); }
-    toast("Photo ajoutée ✓"); await loadProducts(); renderEditor();
+    let existing = (state.current.images || []).length, ok = 0;
+    for (const f of files) {
+      const ext = (f.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      const path = `${state.current.id}/${Date.now()}-${ok}.${ext}`;
+      const up = await sb.storage.from("produits").upload(path, f, { cacheControl: "3600", upsert: false, contentType: f.type || undefined });
+      if (up.error) { console.error("Upload:", up.error); toast("Échec de l'upload : " + up.error.message); continue; }
+      const url = sb.storage.from("produits").getPublicUrl(path).data.publicUrl;
+      const ins = await sb.from("product_images").insert({ product_id: state.current.id, url, position: existing + 1, is_primary: existing === 0 });
+      if (ins.error) { console.error("Insert image:", ins.error); toast("Erreur : " + ins.error.message); continue; }
+      existing++; ok++;
+    }
+    if (ok) toast(ok > 1 ? ok + " photos ajoutées ✓" : "Photo ajoutée ✓");
+    await loadProducts(); renderPhotoGrid();
   }
   async function setPrimary(imgId) {
     await sb.from("product_images").update({ is_primary: false }).eq("product_id", state.current.id);
     const { error } = await sb.from("product_images").update({ is_primary: true }).eq("id", imgId);
     if (error) return toast("Erreur : " + error.message);
-    await loadProducts(); renderEditor();
+    await loadProducts(); renderPhotoGrid();
   }
   async function deleteImage(imgId) {
     const img = (state.current.images || []).find((i) => String(i.id) === String(imgId));
@@ -456,7 +581,7 @@
     }
     const { error } = await sb.from("product_images").delete().eq("id", imgId);
     if (error) return toast("Erreur : " + error.message);
-    toast("Image supprimée."); await loadProducts(); renderEditor();
+    toast("Image supprimée."); await loadProducts(); renderPhotoGrid();
   }
 
   /* ===================== Événements ===================== */
@@ -474,17 +599,11 @@
     else if (a === "delete-variant") deleteVariant(id);
     else if (a === "set-primary") setPrimary(id);
     else if (a === "delete-image") deleteImage(id);
+    else if (a === "remove-pending") { state.pendingImages.splice(Number(id), 1); renderPhotoGrid(); }
   });
   // Fermer la modale en cliquant sur le fond
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeEditor(); });
   $("#psearch").addEventListener("input", (e) => { state.query = e.target.value; renderProducts(); });
-  // Upload depuis un emplacement photo (galerie/appareil)
-  document.addEventListener("change", (e) => {
-    if (e.target && e.target.classList && e.target.classList.contains("ph-slot-input")) {
-      const f = e.target.files && e.target.files[0];
-      if (f) uploadSingle(f, e.target.closest(".pslot"));
-    }
-  });
 
   /* ===================== Démarrage ===================== */
   ensureAdminAndStart();
