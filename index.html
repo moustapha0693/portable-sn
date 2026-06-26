@@ -64,6 +64,8 @@
     position: relative; transition: background .15s;
   }
   .icon-btn:active { background: #f1f5f9; }
+  .avatar { width: 30px; height: 30px; border-radius: 999px; background: var(--blue); color: #fff;
+    display: grid; place-items: center; font-size: 14px; font-weight: 800; }
   .badge-count {
     position: absolute; top: -6px; right: -6px;
     min-width: 18px; height: 18px; padding: 0 5px;
@@ -338,7 +340,7 @@
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/></svg>
           <span class="badge-count" id="fav-badge"></span>
         </button>
-        <button class="icon-btn" data-go="compte" aria-label="Compte">
+        <button class="icon-btn" id="account-btn" data-go="compte" aria-label="Profil">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         </button>
       </div>
@@ -877,6 +879,7 @@
           <p class="pf-line">📍 ${esc(PROFILE.quartier)}, ${esc(PROFILE.region)}</p>
           <p class="pf-line">📞 +221 ${esc(PROFILE.phone)}</p>
           <button class="btn-line-pf" data-profil-edit>Modifier mes informations</button>
+          <button class="btn-line-pf" data-profil-logout style="margin-left:8px">Se déconnecter</button>
         </div>`;
       return;
     }
@@ -925,7 +928,29 @@
     localStorage.setItem("psn_profile", JSON.stringify(PROFILE));
     editingProfile = false;
     toast("Profil enregistré ✓");
+    applyProfileUI();
     renderProfile();
+  }
+
+  // Reconnaissance du client connecté (avatar dans l'en-tête).
+  function applyProfileUI() {
+    const btn = $("#account-btn"); if (!btn) return;
+    if (PROFILE && PROFILE.fullName) {
+      const initial = (PROFILE.fullName.trim().charAt(0) || "?").toUpperCase();
+      btn.innerHTML = `<span class="avatar">${esc(initial)}</span>`;
+      btn.setAttribute("aria-label", "Profil — " + PROFILE.fullName);
+    } else {
+      btn.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+      btn.setAttribute("aria-label", "Profil");
+    }
+  }
+  function logoutProfile() {
+    PROFILE = null;
+    localStorage.removeItem("psn_profile");
+    editingProfile = false;
+    applyProfileUI();
+    renderProfile();
+    toast("Déconnecté");
   }
 
   /* ===== Navigation entre vues ===== */
@@ -1085,10 +1110,11 @@
     const t = e.target.closest(
       "[data-add],[data-fav],[data-inc],[data-dec],[data-del],[data-go],[data-cat]," +
       "[data-open],[data-back],[data-vcolor],[data-vstorage],[data-vmodel],[data-thumb]," +
-      "[data-checkout],[data-pay],[data-order],[data-profil-save],[data-profil-edit],#submit-order");
+      "[data-checkout],[data-pay],[data-order],[data-profil-save],[data-profil-edit],[data-profil-logout],#submit-order");
     if (!t) return;
     if (t.hasAttribute("data-profil-save")) saveProfile();
     else if (t.hasAttribute("data-profil-edit")) { editingProfile = true; renderProfile(); }
+    else if (t.hasAttribute("data-profil-logout")) logoutProfile();
     else if (t.dataset.order) orderNow(t.dataset.order);
     else if (t.dataset.add) addToCart(t.dataset.add);
     else if (t.dataset.fav) toggleFav(t.dataset.fav);
@@ -1208,6 +1234,7 @@
   /* ===== Démarrage ===== */
   async function init() {
     applySettings(); // liens WhatsApp par défaut immédiats
+    applyProfileUI(); // reconnaissance du client si profil déjà enregistré
     $("#grid").innerHTML =
       '<p style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 0">Chargement du catalogue…</p>';
     try {
