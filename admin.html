@@ -402,10 +402,7 @@
           <div class="field"><label>Prix promotionnel</label>
             <div class="amount"><input id="f-oldprice" type="number" min="0" placeholder="—" /><span>FCFA</span></div></div>
         </div>
-        <div class="grid2">
-          <div class="field"><label>Stock / Quantité</label><input id="f-stock" type="number" min="0" placeholder="0" /></div>
-          <div class="field"><label>SKU (code unique)</label><input id="f-sku" placeholder="ex. SAMS-S21P-128" /></div>
-        </div>
+        <div class="field"><label>Stock / Quantité</label><input id="f-stock" type="number" min="0" placeholder="0" /></div>
       </div>
       <div class="form-section">
         <div class="form-section-title">Couleurs disponibles (jusqu'à 5)</div>
@@ -428,13 +425,9 @@
         </div>
         <div class="grid2">
           <div class="field"><label>Catégorie</label><select id="f-cat"><option value="">—</option>${catOpts}</select></div>
-          <div class="field"><label>Slug (auto si vide)</label><input id="f-slug" value="${esc(p ? p.slug : "")}" /></div>
+          <div class="field"><label>État du produit</label><select id="f-cond">${condOpts}</select></div>
         </div>
         <div class="field"><label>Description</label><textarea id="f-desc">${esc(p ? p.description : "")}</textarea></div>
-        <div class="grid2">
-          <div class="field"><label>État du produit</label><select id="f-cond">${condOpts}</select></div>
-          <div class="field"><label>Mots-clés / Tags (SEO)</label><input id="f-keywords" value="${esc(p ? p.keywords : "")}" placeholder="ex. samsung, s21, plus, 5g" /></div>
-        </div>
       </div>
 
       ${prixStock}
@@ -562,14 +555,13 @@
     const wasNew = !state.current;
     const name = $("#f-name").value.trim();
     if (!name) return toast("Le nom est obligatoire.");
-    const slug = uniqueSlug($("#f-slug").value.trim() || slugify(name), state.current ? state.current.id : null);
+    const slug = uniqueSlug(slugify(name), state.current ? state.current.id : null);
     const payload = {
       name, slug,
       brand: $("#f-brand").value.trim() || null,
       category_id: $("#f-cat").value ? Number($("#f-cat").value) : null,
       description: $("#f-desc").value.trim() || null,
       condition: $("#f-cond").value || "Neuf",
-      keywords: $("#f-keywords").value.trim() || null,
       is_hot: $("#f-hot").checked,
       is_active: $("#f-active").checked,
     };
@@ -578,7 +570,7 @@
 
     if (wasNew) {
       const price = numVal("#f-price"), old = numVal("#f-oldprice");
-      const stock = numVal("#f-stock") ?? 0, sku = $("#f-sku").value.trim() || null;
+      const stock = numVal("#f-stock") ?? 0, sku = null;
       if (price == null || price < 0) return toast("Indique un prix valide.");
       if (old != null && old <= price) return toast("Le prix promo doit être supérieur au prix.");
       if (btn) { btn.disabled = true; btn.textContent = "Création…"; }
