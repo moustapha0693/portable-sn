@@ -147,6 +147,13 @@
   }
   .add-btn:active { filter: brightness(1.6); }
   .add-btn[disabled] { background: #cbd5e1; color: #fff; cursor: not-allowed; }
+  .order-btn {
+    margin-top: auto; height: 42px; border-radius: 10px; background: var(--green); color: #fff;
+    font-size: 13px; font-weight: 700; letter-spacing: .3px; transition: filter .15s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .order-btn:active { filter: brightness(.95); }
+  .order-btn[disabled] { background: #cbd5e1; color: #fff; cursor: not-allowed; }
 
   /* ---------- État vide ---------- */
   .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
@@ -523,6 +530,8 @@
           : `<div class="stock" style="color:var(--green)"><span class="ic-dot"></span> En stock</div>`);
 
     const canBuy = !out && p.defaultVariantId;
+    const single = (p.variants || []).length === 1;
+    const cardAction = !canBuy ? "" : (single ? `data-order="${p.defaultVariantId}"` : `data-open="${p.id}"`);
     return `
       <article class="card" data-open="${p.id}">
         <div class="card-media">
@@ -540,8 +549,8 @@
             <span class="price">${fmt(p.price)}</span>
             ${p.oldPrice ? `<span class="price-old">${fmt(p.oldPrice)}</span>` : ""}
           </div>
-          <button class="add-btn" data-add="${canBuy ? p.defaultVariantId : ""}" ${canBuy ? "" : "disabled"}>
-            ${out ? "INDISPONIBLE" : "AJOUTER AU PANIER"}
+          <button class="order-btn" ${cardAction} ${canBuy ? "" : "disabled"}>
+            ${out ? "INDISPONIBLE" : `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg> Commander`}
           </button>
         </div>
       </article>`;
@@ -635,6 +644,13 @@
     save(); renderBadges(); renderCart();
     const suffix = (v.label && v.label !== "Standard") ? ` (${v.label})` : "";
     toast(`${v.product.name}${suffix} ajouté au panier`);
+  }
+  // « Commander » : ajoute la variante au panier puis ouvre directement le tunnel de commande.
+  function orderNow(vid) {
+    const v = variantById(vid);
+    if (!v || v.stock <= 0) return;
+    if (!store.cart[vid]) addToCart(vid);
+    openCheckout();
   }
   function changeQty(vid, delta) {
     if (!store.cart[vid]) return;
@@ -943,8 +959,8 @@
         ${selectors}
         ${p.description ? `<p class="pd-desc">${p.description}</p>` : ""}
         <div class="pd-actions">
-          <button class="add-btn pd-add" data-add="${out ? "" : v.id}" ${out ? "disabled" : ""}>
-            ${out ? "INDISPONIBLE" : "AJOUTER AU PANIER"}
+          <button class="order-btn pd-add" data-order="${out ? "" : v.id}" ${out ? "disabled" : ""}>
+            ${out ? "INDISPONIBLE" : `<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg> Commander`}
           </button>
           <button class="pd-fav ${isFav ? "on" : ""}" data-fav="${p.id}" aria-label="Favori">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="${isFav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/></svg>
@@ -969,9 +985,10 @@
     const t = e.target.closest(
       "[data-add],[data-fav],[data-inc],[data-dec],[data-del],[data-go],[data-cat]," +
       "[data-open],[data-back],[data-vcolor],[data-vstorage],[data-vmodel],[data-thumb]," +
-      "[data-checkout],[data-pay],#submit-order");
+      "[data-checkout],[data-pay],[data-order],#submit-order");
     if (!t) return;
-    if (t.dataset.add) addToCart(t.dataset.add);
+    if (t.dataset.order) orderNow(t.dataset.order);
+    else if (t.dataset.add) addToCart(t.dataset.add);
     else if (t.dataset.fav) toggleFav(t.dataset.fav);
     else if (t.dataset.inc) changeQty(t.dataset.inc, +1);
     else if (t.dataset.dec) changeQty(t.dataset.dec, -1);
