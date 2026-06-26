@@ -455,9 +455,8 @@
   let SETTINGS   = {};             // paramètres globaux (settings)
   let PROFILE    = load("psn_profile", null); // profil client local (inscription)
   let editingProfile = false;
-  let SESSION    = null;        // session Supabase (auth téléphone OTP)
-  let authStep   = "phone";     // 'phone' | 'code'
-  let otpPhone   = null;        // numéro en cours de vérification
+  let SESSION    = null;        // session Supabase (auth numéro + code)
+  let authMode   = "login";     // 'login' | 'signup'
 
   /* ===== Régions et quartiers du Sénégal ===== */
   const REGIONS = ["Dakar", "Thiès", "Saint-Louis", "Diourbel", "Louga", "Fatick", "Kaolack",
@@ -956,10 +955,13 @@
     toast("Profil effacé");
   }
 
-  /* ===== Authentification Supabase (téléphone OTP / SMS) ===== */
+  /* ===== Authentification Supabase (numéro + code à 6 chiffres) ===== */
+  const authEmail = (digits) => "221" + digits + "@portable.sn";
+
   function authCardHtml() {
     if (SESSION) {
-      const ph = ((SESSION.user && SESSION.user.phone) || "").replace(/^221/, "");
+      const em = (SESSION.user && SESSION.user.email) || "";
+      const ph = em.replace(/@.*$/, "").replace(/^221/, "");
       return `
         <div class="account-card">
           <h3>Compte sécurisé ✓</h3>
@@ -967,43 +969,57 @@
           <button class="btn-line-pf" data-auth-logout>Se déconnecter du compte</button>
         </div>`;
     }
-    if (authStep === "code") {
+    if (authMode === "signup") {
       return `
         <div class="account-card">
-          <h3>Vérifie ton numéro</h3>
-          <p class="pf-hint">Saisis le code reçu par SMS au ${esc(otpPhone || "")}.</p>
-          <div class="pf-field"><label>Code reçu</label>
-            <input id="otp-code" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" /></div>
-          <button class="btn-primary" data-auth-verify>Valider le code</button>
-          <button class="btn-line-pf" data-auth-cancel style="margin-top:8px">Changer de numéro</button>
+          <h3>Créer un compte</h3>
+          <p class="pf-hint">Choisis un code à 6 chiffres : il te permettra de te reconnecter sur n'importe quel appareil.</p>
+          <div class="pf-field"><label>Téléphone</label>
+            <div class="pf-phone"><span>+221</span><input id="auth-phone" type="tel" inputmode="numeric" maxlength="9" placeholder="77 123 45 67" /></div></div>
+          <div class="pf-field"><label>Code (6 chiffres)</label>
+            <input id="auth-pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••••" /></div>
+          <div class="pf-field"><label>Confirme le code</label>
+            <input id="auth-pin2" type="password" inputmode="numeric" maxlength="6" placeholder="••••••" /></div>
+          <button class="btn-primary" data-auth-signup>Créer mon compte</button>
+          <button class="btn-line-pf" data-auth-switch="login" style="margin-top:8px">J'ai déjà un compte</button>
         </div>`;
     }
     return `
       <div class="account-card">
-        <h3>Compte sécurisé (SMS)</h3>
-        <p class="pf-hint">Connecte-toi par SMS pour retrouver ton compte sur tous tes appareils.</p>
+        <h3>Se connecter</h3>
+        <p class="pf-hint">Connecte-toi avec ton numéro et ton code à 6 chiffres.</p>
         <div class="pf-field"><label>Téléphone</label>
           <div class="pf-phone"><span>+221</span><input id="auth-phone" type="tel" inputmode="numeric" maxlength="9" placeholder="77 123 45 67" /></div></div>
-        <button class="btn-primary" data-auth-request>Recevoir le code par SMS</button>
+        <div class="pf-field"><label>Code (6 chiffres)</label>
+          <input id="auth-pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••••" /></div>
+        <button class="btn-primary" data-auth-login>Se connecter</button>
+        <button class="btn-line-pf" data-auth-switch="signup" style="margin-top:8px">Créer un compte</button>
       </div>`;
   }
 
-  async function requestOtp() {
-    const d = (($("#auth-phone") || {}).value || "").replace(/\D/g, "");
-    if (d.length !== 9) return toast("Numéro invalide (9 chiffres).");
-    otpPhone = "+221" + d;
-    toast("Envoi du code…");
-    const { error } = await sb.auth.signInWithOtp({ phone: otpPhone });
-    if (error) { console.error("OTP:", error); return toast(error.message || "Envoi du SMS indisponible pour le moment."); }
-    authStep = "code"; renderProfile();
-  }
-  async function verifyOtp() {
-    const code = (($("#otp-code") || {}).value || "").trim();
-    if (code.length < 4) return toast("Saisis le code reçu.");
-    const { error } = await sb.auth.verifyOtp({ phone: otpPhone, token: code, type: "sms" });
-    if (error) { console.error("verifyOtp:", error); return toast(error.message || "Code incorrect."); }
-    authStep = "phone"; otpPhone = null;
+  async function doSignIn(digits, pin) {
+    const { error } = await sb.auth.signInWithPassword({ email: authEmail(digits), password: pin });
+    if (error) { console.error("signin:", error); toast("Numéro ou code incorrect."); return false; }
     toast("Connecté ✓"); // la session est gérée par onAuthStateChange
+    return true;
+  }
+  async function doLogin() {
+    const d = (($("#auth-phone") || {}).value || "").replace(/\D/g, "");
+    const pin = (($("#auth-pin") || {}).value || "").trim();
+    if (d.length !== 9) return toast("Numéro invalide (9 chiffres).");
+    if (!/^\d{6}$/.test(pin)) return toast("Le code doit comporter 6 chiffres.");
+    await doSignIn(d, pin);
+  }
+  async function doSignup() {
+    const d = (($("#auth-phone") || {}).value || "").replace(/\D/g, "");
+    const pin = (($("#auth-pin") || {}).value || "").trim();
+    const pin2 = (($("#auth-pin2") || {}).value || "").trim();
+    if (d.length !== 9) return toast("Numéro invalide (9 chiffres).");
+    if (!/^\d{6}$/.test(pin)) return toast("Le code doit comporter 6 chiffres.");
+    if (pin !== pin2) return toast("Les deux codes ne correspondent pas.");
+    const { error } = await sb.rpc("inscription_client", { p_phone: d, p_pin: pin });
+    if (error) { console.error("signup:", error); return toast(error.message || "Inscription impossible."); }
+    await doSignIn(d, pin); // connexion automatique après inscription
   }
   async function authLogout() { await sb.auth.signOut(); toast("Déconnecté du compte"); }
 
@@ -1199,14 +1215,14 @@
       "[data-add],[data-fav],[data-inc],[data-dec],[data-del],[data-go],[data-cat]," +
       "[data-open],[data-back],[data-vcolor],[data-vstorage],[data-vmodel],[data-thumb]," +
       "[data-checkout],[data-pay],[data-order],[data-profil-save],[data-profil-edit],[data-profil-logout]," +
-      "[data-auth-request],[data-auth-verify],[data-auth-cancel],[data-auth-logout],#submit-order");
+      "[data-auth-login],[data-auth-signup],[data-auth-switch],[data-auth-logout],#submit-order");
     if (!t) return;
     if (t.hasAttribute("data-profil-save")) saveProfile();
     else if (t.hasAttribute("data-profil-edit")) { editingProfile = true; renderProfile(); }
     else if (t.hasAttribute("data-profil-logout")) logoutProfile();
-    else if (t.hasAttribute("data-auth-request")) requestOtp();
-    else if (t.hasAttribute("data-auth-verify")) verifyOtp();
-    else if (t.hasAttribute("data-auth-cancel")) { authStep = "phone"; otpPhone = null; renderProfile(); }
+    else if (t.hasAttribute("data-auth-login")) doLogin();
+    else if (t.hasAttribute("data-auth-signup")) doSignup();
+    else if (t.hasAttribute("data-auth-switch")) { authMode = t.getAttribute("data-auth-switch"); renderProfile(); }
     else if (t.hasAttribute("data-auth-logout")) authLogout();
     else if (t.dataset.order) orderNow(t.dataset.order);
     else if (t.dataset.add) addToCart(t.dataset.add);
