@@ -249,7 +249,9 @@
   .pd-desc { font-size: 14px; color: #374151; line-height: 1.6; margin-top: 14px; }
   .vgroup { margin-top: 16px; }
   .vlabel { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .4px; }
-  .vchips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .vchips { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .vchips::-webkit-scrollbar { display: none; }
+  .vchip { flex: 0 0 auto; }
   .vchip { padding: 9px 16px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card);
     font-size: 14px; font-weight: 600; color: var(--ink); }
   .vchip.active { border-color: var(--blue); color: var(--blue); background: #eff6ff; }

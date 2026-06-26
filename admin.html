@@ -180,6 +180,11 @@
   .oi-total { font-size:17px !important; font-weight:800; color:var(--ink) !important; margin-top:6px; }
   .timeline { display:flex; flex-direction:column; gap:8px; }
   .tl-item { display:flex; align-items:center; gap:10px; }
+  .color-add { display:flex; gap:8px; margin-bottom:10px; }
+  .color-add input { flex:1; height:40px; border:1px solid var(--line); border-radius:10px; padding:0 12px; background:var(--bg); }
+  .color-chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .color-chip { display:inline-flex; align-items:center; gap:6px; background:#eff6ff; color:var(--blue); border:1px solid #bfdbfe; border-radius:999px; padding:5px 6px 5px 12px; font-size:14px; font-weight:600; }
+  .color-chip button { background:rgba(37,99,235,.18); color:var(--blue); width:20px; height:20px; border-radius:999px; font-size:14px; line-height:1; display:grid; place-items:center; }
 
   #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); z-index:80;
     background:var(--ink); color:#fff; padding:12px 18px; border-radius:12px; font-size:14px; font-weight:600;
@@ -266,7 +271,7 @@
     return "Erreur : " + m;
   }
 
-  const state = { products: [], categories: [], current: null, query: "", pendingImages: [],
+  const state = { products: [], categories: [], current: null, query: "", pendingImages: [], pendingColors: [],
                   orders: [], currentOrder: null, oquery: "", tab: "produits" };
 
   const ORDER_STATUSES = [
@@ -361,6 +366,7 @@
   function openEditor(id) {
     state.current = id ? state.products.find((p) => p.id === id) : null;
     state.pendingImages = [];
+    state.pendingColors = [];
     renderEditor();
     $("#modal").classList.add("show");
   }
@@ -400,6 +406,15 @@
           <div class="field"><label>Stock / Quantité</label><input id="f-stock" type="number" min="0" placeholder="0" /></div>
           <div class="field"><label>SKU (code unique)</label><input id="f-sku" placeholder="ex. SAMS-S21P-128" /></div>
         </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Couleurs disponibles (jusqu'à 5)</div>
+        <p class="hint">Optionnel. Chaque couleur devient une variante : le client choisira sa couleur. Le prix et le stock ci-dessus s'appliquent à chaque couleur.</p>
+        <div class="color-add">
+          <input id="f-color-input" placeholder="ex. Noir" maxlength="24" />
+          <button class="btn btn-line btn-sm" data-action="add-color">Ajouter</button>
+        </div>
+        <div class="color-chips" id="color-chips">${colorChipsHtml()}</div>
       </div>` : "";
 
     $("#modal-card").innerHTML = `
@@ -501,6 +516,24 @@
     if (t && state.current) t.textContent = `Photos (${(state.current.images || []).length}/3)`;
   }
 
+  /* ----- Couleurs (création) ----- */
+  function colorChipsHtml() {
+    if (!state.pendingColors.length) return '<span class="hint">Aucune couleur ajoutée.</span>';
+    return state.pendingColors.map((c, i) =>
+      `<span class="color-chip">${esc(c)}<button data-action="remove-color" data-id="${i}" title="Retirer">×</button></span>`).join("");
+  }
+  function refreshColorChips() { const el = $("#color-chips"); if (el) el.innerHTML = colorChipsHtml(); }
+  function addColor() {
+    const input = $("#f-color-input"); if (!input) return;
+    const v = input.value.trim();
+    if (!v) return;
+    if (state.pendingColors.length >= 5) return toast("5 couleurs maximum.");
+    if (state.pendingColors.some((c) => c.toLowerCase() === v.toLowerCase())) { input.value = ""; return; }
+    state.pendingColors.push(v);
+    input.value = ""; input.focus();
+    refreshColorChips();
+  }
+
   function variantRow(v) {
     const id = v ? v.id : "new";
     return `
@@ -552,10 +585,21 @@
       const ins = await sb.from("products").insert(payload).select().single();
       if (ins.error) { reset(); return toast(friendlyErr(ins.error)); }
       const pid = ins.data.id;
-      const vi = await sb.from("product_variants").insert({
-        product_id: pid, label: "Standard", sku, price, old_price: old,
-        stock_initial: stock, stock_actuel: stock, is_active: true,
-      });
+      const colors = state.pendingColors;
+      let vi;
+      if (colors.length) {
+        const rows = colors.map((c, idx) => ({
+          product_id: pid, label: c, color: c,
+          sku: sku ? `${sku}-${slugify(c)}` : null,
+          price, old_price: old, stock_initial: stock, stock_actuel: stock, is_active: true, position: idx,
+        }));
+        vi = await sb.from("product_variants").insert(rows);
+      } else {
+        vi = await sb.from("product_variants").insert({
+          product_id: pid, label: "Standard", sku, price, old_price: old,
+          stock_initial: stock, stock_actuel: stock, is_active: true,
+        });
+      }
       if (vi.error) toast(friendlyErr(vi.error));
       let i = 0;
       for (const f of state.pendingImages) {
@@ -791,6 +835,12 @@
     else if (a === "set-primary") setPrimary(id);
     else if (a === "delete-image") deleteImage(id);
     else if (a === "remove-pending") { state.pendingImages.splice(Number(id), 1); renderPhotoGrid(); }
+    else if (a === "add-color") addColor();
+    else if (a === "remove-color") { state.pendingColors.splice(Number(id), 1); refreshColorChips(); }
+  });
+  // Entrée dans le champ couleur = ajouter
+  document.addEventListener("keydown", (e) => {
+    if (e.target && e.target.id === "f-color-input" && e.key === "Enter") { e.preventDefault(); addColor(); }
   });
   // Fermer la modale en cliquant sur le fond
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeEditor(); });
