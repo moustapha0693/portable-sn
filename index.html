@@ -455,6 +455,9 @@
   let SETTINGS   = {};             // paramètres globaux (settings)
   let PROFILE    = load("psn_profile", null); // profil client local (inscription)
   let editingProfile = false;
+  let SESSION    = null;        // session Supabase (auth téléphone OTP)
+  let authStep   = "phone";     // 'phone' | 'code'
+  let otpPhone   = null;        // numéro en cours de vérification
 
   /* ===== Régions et quartiers du Sénégal ===== */
   const REGIONS = ["Dakar", "Thiès", "Saint-Louis", "Diourbel", "Louga", "Fatick", "Kaolack",
@@ -873,13 +876,13 @@
     const body = $("#profil-body");
     if (!body) return;
     if (PROFILE && !editingProfile) {
-      body.innerHTML = `
+      body.innerHTML = authCardHtml() + `
         <div class="account-card">
           <h3>${esc(PROFILE.fullName)}</h3>
           <p class="pf-line">📍 ${esc(PROFILE.quartier)}, ${esc(PROFILE.region)}</p>
           <p class="pf-line">📞 +221 ${esc(PROFILE.phone)}</p>
           <button class="btn-line-pf" data-profil-edit>Modifier mes informations</button>
-          <button class="btn-line-pf" data-profil-logout style="margin-left:8px">Se déconnecter</button>
+          <button class="btn-line-pf" data-profil-logout style="margin-left:8px">Effacer ce profil</button>
         </div>`;
       return;
     }
@@ -888,9 +891,9 @@
     const inList = (QUARTIERS[region] || []).includes(PROFILE ? PROFILE.quartier : "");
     const quartierSel = PROFILE ? (inList ? PROFILE.quartier : "Autre") : "";
     const autreVal = (PROFILE && !inList) ? PROFILE.quartier : "";
-    body.innerHTML = `
+    body.innerHTML = authCardHtml() + `
       <div class="account-card">
-        <h3>${PROFILE ? "Modifier mes informations" : "Inscription"}</h3>
+        <h3>${PROFILE ? "Modifier mes informations" : "Mes informations"}</h3>
         <p class="pf-hint">Renseigne tes infos une fois pour commander plus vite.</p>
         <div class="pf-field"><label>Nom complet</label>
           <input id="pf-name" type="text" value="${esc(PROFILE ? PROFILE.fullName : "")}" placeholder="ex. Awa Diop" /></div>
@@ -950,7 +953,92 @@
     editingProfile = false;
     applyProfileUI();
     renderProfile();
-    toast("Déconnecté");
+    toast("Profil effacé");
+  }
+
+  /* ===== Authentification Supabase (téléphone OTP / SMS) ===== */
+  function authCardHtml() {
+    if (SESSION) {
+      const ph = ((SESSION.user && SESSION.user.phone) || "").replace(/^221/, "");
+      return `
+        <div class="account-card">
+          <h3>Compte sécurisé ✓</h3>
+          <p class="pf-line">Connecté${ph ? " : +221 " + esc(ph) : ""}. Ton compte est retrouvé sur tous tes appareils.</p>
+          <button class="btn-line-pf" data-auth-logout>Se déconnecter du compte</button>
+        </div>`;
+    }
+    if (authStep === "code") {
+      return `
+        <div class="account-card">
+          <h3>Vérifie ton numéro</h3>
+          <p class="pf-hint">Saisis le code reçu par SMS au ${esc(otpPhone || "")}.</p>
+          <div class="pf-field"><label>Code reçu</label>
+            <input id="otp-code" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" /></div>
+          <button class="btn-primary" data-auth-verify>Valider le code</button>
+          <button class="btn-line-pf" data-auth-cancel style="margin-top:8px">Changer de numéro</button>
+        </div>`;
+    }
+    return `
+      <div class="account-card">
+        <h3>Compte sécurisé (SMS)</h3>
+        <p class="pf-hint">Connecte-toi par SMS pour retrouver ton compte sur tous tes appareils.</p>
+        <div class="pf-field"><label>Téléphone</label>
+          <div class="pf-phone"><span>+221</span><input id="auth-phone" type="tel" inputmode="numeric" maxlength="9" placeholder="77 123 45 67" /></div></div>
+        <button class="btn-primary" data-auth-request>Recevoir le code par SMS</button>
+      </div>`;
+  }
+
+  async function requestOtp() {
+    const d = (($("#auth-phone") || {}).value || "").replace(/\D/g, "");
+    if (d.length !== 9) return toast("Numéro invalide (9 chiffres).");
+    otpPhone = "+221" + d;
+    toast("Envoi du code…");
+    const { error } = await sb.auth.signInWithOtp({ phone: otpPhone });
+    if (error) { console.error("OTP:", error); return toast(error.message || "Envoi du SMS indisponible pour le moment."); }
+    authStep = "code"; renderProfile();
+  }
+  async function verifyOtp() {
+    const code = (($("#otp-code") || {}).value || "").trim();
+    if (code.length < 4) return toast("Saisis le code reçu.");
+    const { error } = await sb.auth.verifyOtp({ phone: otpPhone, token: code, type: "sms" });
+    if (error) { console.error("verifyOtp:", error); return toast(error.message || "Code incorrect."); }
+    authStep = "phone"; otpPhone = null;
+    toast("Connecté ✓"); // la session est gérée par onAuthStateChange
+  }
+  async function authLogout() { await sb.auth.signOut(); toast("Déconnecté du compte"); }
+
+  async function loadServerProfile() {
+    if (!SESSION) return;
+    if (PROFILE) {
+      // Synchronise le profil local vers la table profiles (cross-appareils)
+      await sb.from("profiles").update({
+        full_name: PROFILE.fullName,
+        address: PROFILE.quartier + ", " + PROFILE.region,
+      }).eq("id", SESSION.user.id);
+    } else {
+      const { data } = await sb.from("profiles").select("full_name,phone,address").eq("id", SESSION.user.id).maybeSingle();
+      if (data && data.full_name) {
+        const addr = (data.address || "").split(",");
+        PROFILE = {
+          fullName: data.full_name,
+          quartier: (addr[0] || "").trim(),
+          region: (addr[1] || "").trim() || REGIONS[0],
+          phone: (data.phone || "").replace(/^\+?221/, ""),
+        };
+        localStorage.setItem("psn_profile", JSON.stringify(PROFILE));
+      }
+    }
+  }
+
+  function initAuth() {
+    const apply = async (session) => {
+      SESSION = session;
+      if (SESSION) await loadServerProfile();
+      applyProfileUI();
+      if (isView("compte")) renderProfile();
+    };
+    sb.auth.getSession().then(({ data }) => apply(data.session));
+    sb.auth.onAuthStateChange((_e, session) => apply(session));
   }
 
   /* ===== Navigation entre vues ===== */
@@ -1110,11 +1198,16 @@
     const t = e.target.closest(
       "[data-add],[data-fav],[data-inc],[data-dec],[data-del],[data-go],[data-cat]," +
       "[data-open],[data-back],[data-vcolor],[data-vstorage],[data-vmodel],[data-thumb]," +
-      "[data-checkout],[data-pay],[data-order],[data-profil-save],[data-profil-edit],[data-profil-logout],#submit-order");
+      "[data-checkout],[data-pay],[data-order],[data-profil-save],[data-profil-edit],[data-profil-logout]," +
+      "[data-auth-request],[data-auth-verify],[data-auth-cancel],[data-auth-logout],#submit-order");
     if (!t) return;
     if (t.hasAttribute("data-profil-save")) saveProfile();
     else if (t.hasAttribute("data-profil-edit")) { editingProfile = true; renderProfile(); }
     else if (t.hasAttribute("data-profil-logout")) logoutProfile();
+    else if (t.hasAttribute("data-auth-request")) requestOtp();
+    else if (t.hasAttribute("data-auth-verify")) verifyOtp();
+    else if (t.hasAttribute("data-auth-cancel")) { authStep = "phone"; otpPhone = null; renderProfile(); }
+    else if (t.hasAttribute("data-auth-logout")) authLogout();
     else if (t.dataset.order) orderNow(t.dataset.order);
     else if (t.dataset.add) addToCart(t.dataset.add);
     else if (t.dataset.fav) toggleFav(t.dataset.fav);
@@ -1235,6 +1328,7 @@
   async function init() {
     applySettings(); // liens WhatsApp par défaut immédiats
     applyProfileUI(); // reconnaissance du client si profil déjà enregistré
+    initAuth(); // session Supabase (téléphone OTP)
     $("#grid").innerHTML =
       '<p style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 0">Chargement du catalogue…</p>';
     try {
