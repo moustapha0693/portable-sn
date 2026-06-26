@@ -158,6 +158,29 @@
   .thumb-star { position:absolute; bottom:4px; left:4px; background:rgba(255,255,255,.92); color:#f59e0b; border-radius:5px; font-size:12px; padding:1px 6px; font-weight:700; }
   .thumb-del { position:absolute; top:4px; right:4px; background:rgba(0,0,0,.55); color:#fff; width:22px; height:22px; border-radius:999px; font-size:15px; line-height:1; display:grid; place-items:center; }
 
+  .tabs { display:flex; gap:8px; margin-bottom:18px; border-bottom:1px solid var(--line); }
+  .tab { padding:10px 16px; font-size:15px; font-weight:700; color:var(--muted); border-bottom:2px solid transparent; }
+  .tab.active { color:var(--ink); border-bottom-color:var(--blue); }
+  .orow { display:grid; grid-template-columns:1fr 110px 90px 110px; gap:8px; align-items:center; padding:12px 14px; border-bottom:1px solid var(--line); font-size:14px; cursor:pointer; }
+  .orow:last-child { border-bottom:none; }
+  .orow.header { background:var(--bg); font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; cursor:default; }
+  .orow:hover:not(.header) { background:#f8fafc; }
+  .ocol-date { font-size:13px; color:var(--muted); }
+  @media (max-width:640px){ .orow{grid-template-columns:1fr 84px 96px;} .orow .ocol-date{display:none;} }
+  .status-badge { font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; display:inline-block; }
+  .status-badge.s-en_attente { background:#fef9c3; color:#854d0e; }
+  .status-badge.s-confirmee { background:#dbeafe; color:#1e40af; }
+  .status-badge.s-en_livraison { background:#e0e7ff; color:#4338ca; }
+  .status-badge.s-livree { background:#dcfce7; color:#166534; }
+  .status-badge.s-annulee { background:#fee2e2; color:#991b1b; }
+  .muted { color:var(--muted); font-size:13px; }
+  .oi-row { display:grid; grid-template-columns:1fr auto auto; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .oi-totals { margin-top:12px; }
+  .oi-totals > div { display:flex; justify-content:space-between; font-size:14px; color:var(--muted); margin-bottom:4px; }
+  .oi-total { font-size:17px !important; font-weight:800; color:var(--ink) !important; margin-top:6px; }
+  .timeline { display:flex; flex-direction:column; gap:8px; }
+  .tl-item { display:flex; align-items:center; gap:10px; }
+
   #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); z-index:80;
     background:var(--ink); color:#fff; padding:12px 18px; border-radius:12px; font-size:14px; font-weight:600;
     opacity:0; pointer-events:none; transition:all .25s; max-width:90%; }
@@ -185,12 +208,27 @@
     <div style="display:flex;align-items:center;gap:8px"><span class="who" id="who"></span><a class="btn btn-line btn-sm" href="index.html" target="_blank" rel="noopener" style="text-decoration:none">Voir la boutique ↗</a><button class="btn btn-line btn-sm" data-action="logout">Déconnexion</button></div>
   </div>
   <div class="wrap">
-    <div class="head-row">
-      <h2>Produits</h2>
-      <input class="search-admin" id="psearch" type="search" placeholder="Rechercher un produit…" />
-      <button class="btn btn-blue" data-action="new-product">+ Nouveau produit</button>
+    <div class="tabs">
+      <button class="tab active" data-tab="produits">Produits</button>
+      <button class="tab" data-tab="commandes">Commandes</button>
     </div>
-    <div class="ptable" id="ptable"></div>
+
+    <section id="tab-produits">
+      <div class="head-row">
+        <h2>Produits</h2>
+        <input class="search-admin" id="psearch" type="search" placeholder="Rechercher un produit…" />
+        <button class="btn btn-blue" data-action="new-product">+ Nouveau produit</button>
+      </div>
+      <div class="ptable" id="ptable"></div>
+    </section>
+
+    <section id="tab-commandes" hidden>
+      <div class="head-row">
+        <h2>Commandes</h2>
+        <input class="search-admin" id="osearch" type="search" placeholder="Réf, nom ou téléphone…" />
+      </div>
+      <div class="ptable" id="otable"></div>
+    </section>
   </div>
 </div>
 
@@ -228,7 +266,17 @@
     return "Erreur : " + m;
   }
 
-  const state = { products: [], categories: [], current: null, query: "", pendingImages: [] };
+  const state = { products: [], categories: [], current: null, query: "", pendingImages: [],
+                  orders: [], currentOrder: null, oquery: "", tab: "produits" };
+
+  const ORDER_STATUSES = [
+    { v: "en_attente", l: "En attente" },
+    { v: "confirmee", l: "Confirmée" },
+    { v: "en_livraison", l: "En livraison" },
+    { v: "livree", l: "Livrée" },
+    { v: "annulee", l: "Annulée" },
+  ];
+  const statusLabel = (v) => (ORDER_STATUSES.find((s) => s.v === v) || {}).l || v;
 
   let toastTimer;
   function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show");
@@ -316,7 +364,7 @@
     renderEditor();
     $("#modal").classList.add("show");
   }
-  function closeEditor() { $("#modal").classList.remove("show"); state.current = null; }
+  function closeEditor() { $("#modal").classList.remove("show"); state.current = null; state.currentOrder = null; }
 
   function renderEditor() {
     const p = state.current;
@@ -616,12 +664,123 @@
     toast("Image supprimée."); await loadProducts(); renderPhotoGrid();
   }
 
+  /* ===================== Commandes ===================== */
+  function switchTab(name) {
+    state.tab = name;
+    $("#tab-produits").hidden = name !== "produits";
+    $("#tab-commandes").hidden = name !== "commandes";
+    $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+    if (name === "commandes") loadOrders();
+  }
+
+  async function loadOrders() {
+    $("#otable").innerHTML = '<div class="orow"><div class="hint">Chargement…</div></div>';
+    const { data, error } = await sb.from("orders")
+      .select("id,reference,customer_name,customer_phone,customer_address,status,subtotal,discount,delivery_fee,total,channel,note,created_at," +
+              "zone:delivery_zones(name)," +
+              "items:order_items(id,product_name,variant_label,brand,unit_price,quantity,line_total)," +
+              "history:order_status_history(old_status,new_status,changed_by,created_at)")
+      .order("created_at", { ascending: false });
+    if (error) { $("#otable").innerHTML = ""; return toast("Erreur : " + error.message); }
+    state.orders = data || [];
+    if (state.currentOrder) state.currentOrder = state.orders.find((o) => o.id === state.currentOrder.id) || null;
+    renderOrders();
+  }
+
+  function renderOrders() {
+    const q = state.oquery.trim().toLowerCase();
+    const list = state.orders.filter((o) =>
+      !q || (o.reference + " " + o.customer_name + " " + o.customer_phone).toLowerCase().includes(q));
+    const rows = list.map((o) => `
+      <div class="orow" data-action="open-order" data-id="${o.id}">
+        <div><div class="pname">${esc(o.reference)}</div><div class="pbrand">${esc(o.customer_name)} · ${esc(o.customer_phone)}</div></div>
+        <div class="right">${fmt(o.total)}</div>
+        <div class="ocol-date">${new Date(o.created_at).toLocaleDateString("fr-FR")}</div>
+        <div><span class="status-badge s-${o.status}">${statusLabel(o.status)}</span></div>
+      </div>`).join("");
+    $("#otable").innerHTML =
+      `<div class="orow header"><div>Commande</div><div class="right">Total</div><div class="ocol-date">Date</div><div>Statut</div></div>` +
+      (rows || '<div class="orow"><div class="hint">Aucune commande.</div></div>');
+  }
+
+  function openOrder(id) {
+    state.currentOrder = state.orders.find((o) => o.id === id) || null;
+    if (!state.currentOrder) return;
+    renderOrderDetail();
+    $("#modal").classList.add("show");
+  }
+
+  function renderOrderDetail() {
+    const o = state.currentOrder; if (!o) return;
+    const items = (o.items || []).map((it) => `
+      <div class="oi-row">
+        <div>${esc(it.product_name)}${it.variant_label ? ` <span class="muted">· ${esc(it.variant_label)}</span>` : ""}</div>
+        <div class="right">${it.quantity} × ${fmt(it.unit_price)}</div>
+        <div class="right"><b>${fmt(it.line_total)}</b></div>
+      </div>`).join("");
+    const hist = (o.history || []).slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).map((h) => `
+      <div class="tl-item">
+        <span class="status-badge s-${h.new_status}">${statusLabel(h.new_status)}</span>
+        <span class="muted">${new Date(h.created_at).toLocaleString("fr-FR")}</span>
+      </div>`).join("");
+    const opts = ORDER_STATUSES.map((s) => `<option value="${s.v}" ${s.v === o.status ? "selected" : ""}>${s.l}</option>`).join("");
+
+    $("#modal-card").innerHTML = `
+      <h3>Commande ${esc(o.reference)} <span class="status-badge s-${o.status}">${statusLabel(o.status)}</span></h3>
+
+      <div class="form-section">
+        <div class="form-section-title">Client</div>
+        <div>${esc(o.customer_name)} · ${esc(o.customer_phone)}</div>
+        ${o.customer_address ? `<div class="muted">${esc(o.customer_address)}</div>` : ""}
+        <div class="muted">Zone : ${o.zone ? esc(o.zone.name) : "—"} · Canal : ${esc(o.channel)} · ${new Date(o.created_at).toLocaleString("fr-FR")}</div>
+        ${o.note ? `<div class="muted">Note : ${esc(o.note)}</div>` : ""}
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Articles</div>
+        ${items || '<p class="hint">Aucun article.</p>'}
+        <div class="oi-totals">
+          <div><span>Sous-total</span><span>${fmt(o.subtotal)}</span></div>
+          ${o.discount ? `<div><span>Remise</span><span>− ${fmt(o.discount)}</span></div>` : ""}
+          <div><span>Livraison</span><span>${o.delivery_fee ? fmt(o.delivery_fee) : "Offerte"}</span></div>
+          <div class="oi-total"><span>Total</span><span>${fmt(o.total)}</span></div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Changer le statut</div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <select id="order-status" style="flex:1">${opts}</select>
+          <button class="btn btn-blue" data-action="apply-status" data-id="${o.id}">Mettre à jour</button>
+        </div>
+        <div class="form-section-title" style="margin-top:16px">Historique</div>
+        <div class="timeline">${hist || '<p class="hint">—</p>'}</div>
+      </div>
+
+      <div class="modal-actions">
+        <span></span>
+        <button class="btn btn-line" data-action="close-modal">Fermer</button>
+      </div>`;
+  }
+
+  async function applyStatus(id) {
+    const sel = $("#order-status"); if (!sel) return;
+    const { error } = await sb.from("orders").update({ status: sel.value }).eq("id", id);
+    if (error) return toast("Erreur : " + error.message);
+    toast("Statut mis à jour ✓");
+    await loadOrders(); renderOrderDetail();
+  }
+
   /* ===================== Événements ===================== */
   document.addEventListener("click", (e) => {
+    const tabBtn = e.target.closest("[data-tab]");
+    if (tabBtn) return switchTab(tabBtn.dataset.tab);
     const t = e.target.closest("[data-action]");
     if (!t) return;
     const a = t.dataset.action, id = t.dataset.id;
     if (a === "logout") { sb.auth.signOut().then(() => showLogin()); }
+    else if (a === "open-order") openOrder(id);
+    else if (a === "apply-status") applyStatus(id);
     else if (a === "new-product") openEditor(null);
     else if (a === "edit-product") openEditor(id);
     else if (a === "close-modal") closeEditor();
@@ -636,6 +795,7 @@
   // Fermer la modale en cliquant sur le fond
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeEditor(); });
   $("#psearch").addEventListener("input", (e) => { state.query = e.target.value; renderProducts(); });
+  $("#osearch").addEventListener("input", (e) => { state.oquery = e.target.value; renderOrders(); });
 
   /* ===================== Démarrage ===================== */
   ensureAdminAndStart();
