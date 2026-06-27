@@ -455,8 +455,7 @@
   let SETTINGS   = {};             // paramètres globaux (settings)
   let PROFILE    = load("psn_profile", null); // profil client local (inscription)
   let editingProfile = false;
-  let SESSION    = null;        // session Supabase (auth numéro + code)
-  let authMode   = "login";     // 'login' | 'signup'
+  let authMode   = "login";     // 'login' | 'signup' (écran compte non connecté)
 
   /* ===== Régions et quartiers du Sénégal ===== */
   const REGIONS = ["Dakar", "Thiès", "Saint-Louis", "Diourbel", "Louga", "Fatick", "Kaolack",
@@ -875,37 +874,18 @@
     const body = $("#profil-body");
     if (!body) return;
     if (PROFILE && !editingProfile) {
-      body.innerHTML = authCardHtml() + `
+      body.innerHTML = `
         <div class="account-card">
-          <h3>${esc(PROFILE.fullName)}</h3>
+          <h3>${esc(PROFILE.fullName || "Mon profil")}</h3>
           <p class="pf-line">📍 ${esc(PROFILE.quartier)}, ${esc(PROFILE.region)}</p>
           <p class="pf-line">📞 +221 ${esc(PROFILE.phone)}</p>
           <button class="btn-line-pf" data-profil-edit>Modifier mes informations</button>
-          <button class="btn-line-pf" data-profil-logout style="margin-left:8px">Effacer ce profil</button>
+          <button class="btn-line-pf" data-profil-logout style="margin-left:8px">Se déconnecter</button>
         </div>`;
       return;
     }
-    const region = (PROFILE && PROFILE.region) || REGIONS[0];
-    const regionOpts = REGIONS.map((r) => `<option ${r === region ? "selected" : ""}>${esc(r)}</option>`).join("");
-    const inList = (QUARTIERS[region] || []).includes(PROFILE ? PROFILE.quartier : "");
-    const quartierSel = PROFILE ? (inList ? PROFILE.quartier : "Autre") : "";
-    const autreVal = (PROFILE && !inList) ? PROFILE.quartier : "";
-    body.innerHTML = authCardHtml() + `
-      <div class="account-card">
-        <h3>${PROFILE ? "Modifier mes informations" : "Mes informations"}</h3>
-        <p class="pf-hint">Renseigne tes infos une fois pour commander plus vite.</p>
-        <div class="pf-field"><label>Nom complet</label>
-          <input id="pf-name" type="text" value="${esc(PROFILE ? PROFILE.fullName : "")}" placeholder="ex. Awa Diop" /></div>
-        <div class="pf-field"><label>Région</label>
-          <select id="pf-region">${regionOpts}</select></div>
-        <div class="pf-field"><label>Quartier</label>
-          <select id="pf-quartier">${quartierOptions(region, quartierSel)}</select></div>
-        <div class="pf-field pf-autre" ${quartierSel === "Autre" ? "" : "hidden"}><label>Précise ton quartier</label>
-          <input id="pf-quartier-autre" type="text" value="${esc(autreVal)}" placeholder="Nom de ton quartier" /></div>
-        <div class="pf-field"><label>Téléphone</label>
-          <div class="pf-phone"><span>+221</span><input id="pf-phone" type="tel" inputmode="numeric" maxlength="9" value="${esc(PROFILE ? PROFILE.phone : "")}" placeholder="77 123 45 67" /></div></div>
-        <button class="btn-primary pf-save" data-profil-save>Enregistrer mon profil</button>
-      </div>`;
+    if (PROFILE && editingProfile) { body.innerHTML = profileEditFormHtml(); return; }
+    body.innerHTML = (authMode === "signup") ? signupFormHtml() : loginFormHtml();
   }
 
   function onRegionChange() {
@@ -917,18 +897,22 @@
     const a = $(".pf-autre"); if (a) a.hidden = $("#pf-quartier").value !== "Autre";
   }
 
-  function saveProfile() {
-    const name = $("#pf-name").value.trim();
-    const region = $("#pf-region").value;
-    let quartier = $("#pf-quartier").value;
-    if (quartier === "Autre") quartier = $("#pf-quartier-autre").value.trim();
-    const phone = $("#pf-phone").value.replace(/\D/g, "");
+  async function saveProfile() {
+    const name = (($("#pf-name") || {}).value || "").trim();
+    const region = ($("#pf-region") || {}).value || REGIONS[0];
+    let quartier = ($("#pf-quartier") || {}).value || "";
+    if (quartier === "Autre") quartier = (($("#pf-quartier-autre") || {}).value || "").trim();
     if (!name) return toast("Indique ton nom complet.");
     if (!quartier) return toast("Indique ton quartier.");
-    if (phone.length !== 9) return toast("Le numéro doit comporter 9 chiffres.");
+    const phone = PROFILE ? PROFILE.phone : "";
     PROFILE = { fullName: name, region, quartier, phone };
     localStorage.setItem("psn_profile", JSON.stringify(PROFILE));
     editingProfile = false;
+    if (phone) {
+      const { error } = await sb.rpc("maj_profil_client",
+        { p_phone: phone, p_full_name: name, p_region: region, p_quartier: quartier });
+      if (error) console.error("maj_profil_client:", error);
+    }
     toast("Profil enregistré ✓");
     applyProfileUI();
     renderProfile();
@@ -952,109 +936,107 @@
     editingProfile = false;
     applyProfileUI();
     renderProfile();
-    toast("Profil effacé");
+    toast("Déconnecté");
   }
 
-  /* ===== Authentification Supabase (numéro + code à 6 chiffres) ===== */
-  const authEmail = (digits) => "221" + digits + "@portable.sn";
+  /* ===== Comptes clients (téléphone + mot de passe à 6 chiffres, sans OTP) ===== */
+  const regionSelectHtml = (sel) => REGIONS.map((r) => `<option ${r === sel ? "selected" : ""}>${esc(r)}</option>`).join("");
 
-  function authCardHtml() {
-    if (SESSION) {
-      const em = (SESSION.user && SESSION.user.email) || "";
-      const ph = em.replace(/@.*$/, "").replace(/^221/, "");
-      return `
-        <div class="account-card">
-          <h3>Compte sécurisé ✓</h3>
-          <p class="pf-line">Connecté${ph ? " : +221 " + esc(ph) : ""}. Ton compte est retrouvé sur tous tes appareils.</p>
-          <button class="btn-line-pf" data-auth-logout>Se déconnecter du compte</button>
-        </div>`;
-    }
-    if (authMode === "signup") {
-      return `
-        <div class="account-card">
-          <h3>Créer un compte</h3>
-          <p class="pf-hint">Choisis un code à 6 chiffres : il te permettra de te reconnecter sur n'importe quel appareil.</p>
-          <div class="pf-field"><label>Téléphone</label>
-            <div class="pf-phone"><span>+221</span><input id="auth-phone" type="tel" inputmode="numeric" maxlength="9" placeholder="77 123 45 67" /></div></div>
-          <div class="pf-field"><label>Code (6 chiffres)</label>
-            <input id="auth-pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••••" /></div>
-          <div class="pf-field"><label>Confirme le code</label>
-            <input id="auth-pin2" type="password" inputmode="numeric" maxlength="6" placeholder="••••••" /></div>
-          <button class="btn-primary" data-auth-signup>Créer mon compte</button>
-          <button class="btn-line-pf" data-auth-switch="login" style="margin-top:8px">J'ai déjà un compte</button>
-        </div>`;
-    }
+  function loginFormHtml() {
     return `
       <div class="account-card">
         <h3>Se connecter</h3>
-        <p class="pf-hint">Connecte-toi avec ton numéro et ton code à 6 chiffres.</p>
-        <div class="pf-field"><label>Téléphone</label>
+        <p class="pf-hint">Connecte-toi avec ton numéro et ton mot de passe à 6 chiffres.</p>
+        <div class="pf-field"><label>Numéro de téléphone</label>
           <div class="pf-phone"><span>+221</span><input id="auth-phone" type="tel" inputmode="numeric" maxlength="9" placeholder="77 123 45 67" /></div></div>
-        <div class="pf-field"><label>Code (6 chiffres)</label>
+        <div class="pf-field"><label>Mot de passe (6 chiffres)</label>
           <input id="auth-pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••••" /></div>
         <button class="btn-primary" data-auth-login>Se connecter</button>
         <button class="btn-line-pf" data-auth-switch="signup" style="margin-top:8px">Créer un compte</button>
       </div>`;
   }
 
-  async function doSignIn(digits, pin) {
-    const { error } = await sb.auth.signInWithPassword({ email: authEmail(digits), password: pin });
-    if (error) { console.error("signin:", error); toast("Numéro ou code incorrect."); return false; }
-    toast("Connecté ✓"); // la session est gérée par onAuthStateChange
-    return true;
+  function signupFormHtml() {
+    const region = REGIONS[0];
+    return `
+      <div class="account-card">
+        <h3>Créer un compte</h3>
+        <p class="pf-hint">Renseigne tes infos et choisis un mot de passe à 6 chiffres (réutilisable sur tous tes appareils).</p>
+        <div class="pf-field"><label>Nom complet</label>
+          <input id="pf-name" type="text" placeholder="ex. Awa Diop" /></div>
+        <div class="pf-field"><label>Numéro de téléphone</label>
+          <div class="pf-phone"><span>+221</span><input id="auth-phone" type="tel" inputmode="numeric" maxlength="9" placeholder="77 123 45 67" /></div></div>
+        <div class="pf-field"><label>Région</label><select id="pf-region">${regionSelectHtml(region)}</select></div>
+        <div class="pf-field"><label>Quartier</label><select id="pf-quartier">${quartierOptions(region, "")}</select></div>
+        <div class="pf-field pf-autre" hidden><label>Autre — précise ton quartier</label>
+          <input id="pf-quartier-autre" type="text" placeholder="Nom de ton quartier" /></div>
+        <div class="pf-field"><label>Mot de passe (6 chiffres)</label>
+          <input id="auth-pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••••" /></div>
+        <div class="pf-field"><label>Confirmer le mot de passe</label>
+          <input id="auth-pin2" type="password" inputmode="numeric" maxlength="6" placeholder="••••••" /></div>
+        <button class="btn-primary" data-auth-signup>Créer mon compte</button>
+        <button class="btn-line-pf" data-auth-switch="login" style="margin-top:8px">J'ai déjà un compte</button>
+      </div>`;
   }
+
+  function profileEditFormHtml() {
+    const region = (PROFILE && PROFILE.region) || REGIONS[0];
+    const inList = (QUARTIERS[region] || []).includes(PROFILE ? PROFILE.quartier : "");
+    const quartierSel = PROFILE ? (inList ? PROFILE.quartier : "Autre") : "";
+    const autreVal = (PROFILE && !inList) ? PROFILE.quartier : "";
+    return `
+      <div class="account-card">
+        <h3>Modifier mes informations</h3>
+        <div class="pf-field"><label>Nom complet</label>
+          <input id="pf-name" type="text" value="${esc(PROFILE ? PROFILE.fullName : "")}" placeholder="ex. Awa Diop" /></div>
+        <div class="pf-field"><label>Région</label><select id="pf-region">${regionSelectHtml(region)}</select></div>
+        <div class="pf-field"><label>Quartier</label><select id="pf-quartier">${quartierOptions(region, quartierSel)}</select></div>
+        <div class="pf-field pf-autre" ${quartierSel === "Autre" ? "" : "hidden"}><label>Autre — précise ton quartier</label>
+          <input id="pf-quartier-autre" type="text" value="${esc(autreVal)}" placeholder="Nom de ton quartier" /></div>
+        <p class="pf-hint">📞 +221 ${esc(PROFILE ? PROFILE.phone : "")} — numéro du compte</p>
+        <button class="btn-primary pf-save" data-profil-save>Enregistrer</button>
+      </div>`;
+  }
+
+  function setProfileFromAccount(acc) {
+    PROFILE = {
+      fullName: acc.full_name || "",
+      region: acc.region || REGIONS[0],
+      quartier: acc.quartier || "",
+      phone: acc.phone || "",
+    };
+    localStorage.setItem("psn_profile", JSON.stringify(PROFILE));
+  }
+
   async function doLogin() {
     const d = (($("#auth-phone") || {}).value || "").replace(/\D/g, "");
     const pin = (($("#auth-pin") || {}).value || "").trim();
     if (d.length !== 9) return toast("Numéro invalide (9 chiffres).");
-    if (!/^\d{6}$/.test(pin)) return toast("Le code doit comporter 6 chiffres.");
-    await doSignIn(d, pin);
+    if (!/^\d{6}$/.test(pin)) return toast("Le mot de passe doit comporter 6 chiffres.");
+    const { data, error } = await sb.rpc("connexion_client", { p_phone: d, p_pin: pin });
+    if (error) { console.error(error); return toast(error.message || "Connexion impossible."); }
+    setProfileFromAccount(data); editingProfile = false;
+    toast("Connecté ✓"); applyProfileUI(); renderProfile();
   }
+
   async function doSignup() {
+    const name = (($("#pf-name") || {}).value || "").trim();
     const d = (($("#auth-phone") || {}).value || "").replace(/\D/g, "");
+    const region = ($("#pf-region") || {}).value || REGIONS[0];
+    let quartier = ($("#pf-quartier") || {}).value || "";
+    if (quartier === "Autre") quartier = (($("#pf-quartier-autre") || {}).value || "").trim();
     const pin = (($("#auth-pin") || {}).value || "").trim();
     const pin2 = (($("#auth-pin2") || {}).value || "").trim();
+    if (!name) return toast("Indique ton nom complet.");
     if (d.length !== 9) return toast("Numéro invalide (9 chiffres).");
-    if (!/^\d{6}$/.test(pin)) return toast("Le code doit comporter 6 chiffres.");
-    if (pin !== pin2) return toast("Les deux codes ne correspondent pas.");
-    const { error } = await sb.rpc("inscription_client", { p_phone: d, p_pin: pin });
-    if (error) { console.error("signup:", error); return toast(error.message || "Inscription impossible."); }
-    await doSignIn(d, pin); // connexion automatique après inscription
-  }
-  async function authLogout() { await sb.auth.signOut(); toast("Déconnecté du compte"); }
-
-  async function loadServerProfile() {
-    if (!SESSION) return;
-    if (PROFILE) {
-      // Synchronise le profil local vers la table profiles (cross-appareils)
-      await sb.from("profiles").update({
-        full_name: PROFILE.fullName,
-        address: PROFILE.quartier + ", " + PROFILE.region,
-      }).eq("id", SESSION.user.id);
-    } else {
-      const { data } = await sb.from("profiles").select("full_name,phone,address").eq("id", SESSION.user.id).maybeSingle();
-      if (data && data.full_name) {
-        const addr = (data.address || "").split(",");
-        PROFILE = {
-          fullName: data.full_name,
-          quartier: (addr[0] || "").trim(),
-          region: (addr[1] || "").trim() || REGIONS[0],
-          phone: (data.phone || "").replace(/^\+?221/, ""),
-        };
-        localStorage.setItem("psn_profile", JSON.stringify(PROFILE));
-      }
-    }
-  }
-
-  function initAuth() {
-    const apply = async (session) => {
-      SESSION = session;
-      if (SESSION) await loadServerProfile();
-      applyProfileUI();
-      if (isView("compte")) renderProfile();
-    };
-    sb.auth.getSession().then(({ data }) => apply(data.session));
-    sb.auth.onAuthStateChange((_e, session) => apply(session));
+    if (!quartier) return toast("Indique ton quartier.");
+    if (!/^\d{6}$/.test(pin)) return toast("Le mot de passe doit comporter 6 chiffres.");
+    if (pin !== pin2) return toast("Les deux mots de passe ne correspondent pas.");
+    const { data, error } = await sb.rpc("inscription_client",
+      { p_phone: d, p_pin: pin, p_full_name: name, p_region: region, p_quartier: quartier });
+    if (error) { console.error(error); return toast(error.message || "Inscription impossible."); }
+    setProfileFromAccount(data); editingProfile = false;
+    toast("Compte créé ✓"); applyProfileUI(); renderProfile();
   }
 
   /* ===== Navigation entre vues ===== */
@@ -1215,7 +1197,7 @@
       "[data-add],[data-fav],[data-inc],[data-dec],[data-del],[data-go],[data-cat]," +
       "[data-open],[data-back],[data-vcolor],[data-vstorage],[data-vmodel],[data-thumb]," +
       "[data-checkout],[data-pay],[data-order],[data-profil-save],[data-profil-edit],[data-profil-logout]," +
-      "[data-auth-login],[data-auth-signup],[data-auth-switch],[data-auth-logout],#submit-order");
+      "[data-auth-login],[data-auth-signup],[data-auth-switch],#submit-order");
     if (!t) return;
     if (t.hasAttribute("data-profil-save")) saveProfile();
     else if (t.hasAttribute("data-profil-edit")) { editingProfile = true; renderProfile(); }
@@ -1223,7 +1205,6 @@
     else if (t.hasAttribute("data-auth-login")) doLogin();
     else if (t.hasAttribute("data-auth-signup")) doSignup();
     else if (t.hasAttribute("data-auth-switch")) { authMode = t.getAttribute("data-auth-switch"); renderProfile(); }
-    else if (t.hasAttribute("data-auth-logout")) authLogout();
     else if (t.dataset.order) orderNow(t.dataset.order);
     else if (t.dataset.add) addToCart(t.dataset.add);
     else if (t.dataset.fav) toggleFav(t.dataset.fav);
@@ -1344,7 +1325,6 @@
   async function init() {
     applySettings(); // liens WhatsApp par défaut immédiats
     applyProfileUI(); // reconnaissance du client si profil déjà enregistré
-    initAuth(); // session Supabase (téléphone OTP)
     $("#grid").innerHTML =
       '<p style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 0">Chargement du catalogue…</p>';
     try {
