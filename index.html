@@ -456,6 +456,7 @@
   let PROFILE    = load("psn_profile", null); // profil client local (inscription)
   let editingProfile = false;
   let authMode   = "login";     // 'login' | 'signup' (écran compte non connecté)
+  let authBusy   = false;       // anti double-soumission connexion/inscription
 
   /* ===== Régions et quartiers du Sénégal ===== */
   const REGIONS = ["Dakar", "Thiès", "Saint-Louis", "Diourbel", "Louga", "Fatick", "Kaolack",
@@ -1009,17 +1010,27 @@
   }
 
   async function doLogin() {
+    if (authBusy) return;
     const d = (($("#auth-phone") || {}).value || "").replace(/\D/g, "");
     const pin = (($("#auth-pin") || {}).value || "").trim();
     if (d.length !== 9) return toast("Numéro invalide (9 chiffres).");
     if (!/^\d{6}$/.test(pin)) return toast("Le mot de passe doit comporter 6 chiffres.");
-    const { data, error } = await sb.rpc("connexion_client", { p_phone: d, p_pin: pin });
-    if (error) { console.error(error); return toast(error.message || "Connexion impossible."); }
-    setProfileFromAccount(data); editingProfile = false;
-    toast("Connecté ✓"); applyProfileUI(); renderProfile();
+    authBusy = true;
+    const btn = $("[data-auth-login]"); if (btn) { btn.disabled = true; btn.textContent = "Connexion…"; }
+    try {
+      const { data, error } = await sb.rpc("connexion_client", { p_phone: d, p_pin: pin });
+      if (error) { toast(error.message || "Connexion impossible."); return; }
+      setProfileFromAccount(data); editingProfile = false;
+      toast("Connecté ✓"); applyProfileUI(); renderProfile();
+    } catch (e) { console.error(e); toast("Connexion impossible."); }
+    finally {
+      authBusy = false;
+      const b = $("[data-auth-login]"); if (b) { b.disabled = false; b.textContent = "Se connecter"; }
+    }
   }
 
   async function doSignup() {
+    if (authBusy) return;
     const name = (($("#pf-name") || {}).value || "").trim();
     const d = (($("#auth-phone") || {}).value || "").replace(/\D/g, "");
     const region = ($("#pf-region") || {}).value || REGIONS[0];
@@ -1032,11 +1043,26 @@
     if (!quartier) return toast("Indique ton quartier.");
     if (!/^\d{6}$/.test(pin)) return toast("Le mot de passe doit comporter 6 chiffres.");
     if (pin !== pin2) return toast("Les deux mots de passe ne correspondent pas.");
-    const { data, error } = await sb.rpc("inscription_client",
-      { p_phone: d, p_pin: pin, p_full_name: name, p_region: region, p_quartier: quartier });
-    if (error) { console.error(error); return toast(error.message || "Inscription impossible."); }
-    setProfileFromAccount(data); editingProfile = false;
-    toast("Compte créé ✓"); applyProfileUI(); renderProfile();
+    authBusy = true;
+    const btn = $("[data-auth-signup]"); if (btn) { btn.disabled = true; btn.textContent = "Création…"; }
+    try {
+      const { data, error } = await sb.rpc("inscription_client",
+        { p_phone: d, p_pin: pin, p_full_name: name, p_region: region, p_quartier: quartier });
+      if (error) {
+        if (/existe déjà/i.test(error.message || "")) {
+          authMode = "login"; renderProfile();
+          const p = $("#auth-phone"); if (p) p.value = d;
+          toast("Ce numéro a déjà un compte. Connecte-toi.");
+        } else toast(error.message || "Inscription impossible.");
+        return;
+      }
+      setProfileFromAccount(data); editingProfile = false;
+      toast("Compte créé ✓"); applyProfileUI(); renderProfile();
+    } catch (e) { console.error(e); toast("Inscription impossible."); }
+    finally {
+      authBusy = false;
+      const b = $("[data-auth-signup]"); if (b) { b.disabled = false; b.textContent = "Créer mon compte"; }
+    }
   }
 
   /* ===== Navigation entre vues ===== */
