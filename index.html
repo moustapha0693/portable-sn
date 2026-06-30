@@ -327,6 +327,30 @@
   .confirm-ref strong { display: inline-block; margin-top: 4px; font-size: 22px; color: var(--ink); letter-spacing: 1px; }
   .confirm-line { font-size: 15px; margin-bottom: 8px; }
   .confirm-wa { margin-top: 18px; }
+
+  /* ---------- Mes commandes ---------- */
+  .mo-list { display: flex; flex-direction: column; gap: 10px; }
+  .mo-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+    text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px; cursor: pointer; }
+  .mo-row:active { background: #f8fafc; }
+  .mo-ref { font-weight: 800; font-size: 15px; }
+  .mo-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .mo-right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .mo-total { font-weight: 800; font-size: 15px; }
+  .status-badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; display: inline-block; white-space: nowrap; }
+  .status-badge.s-en_attente { background: #fef9c3; color: #854d0e; }
+  .status-badge.s-confirmee { background: #dbeafe; color: #1e40af; }
+  .status-badge.s-en_livraison { background: #e0e7ff; color: #4338ca; }
+  .status-badge.s-livree { background: #dcfce7; color: #166534; }
+  .status-badge.s-annulee { background: #fee2e2; color: #991b1b; }
+  .oi-row { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .muted { color: var(--muted); }
+  .mo-totals { margin-top: 12px; }
+  .mo-totals > div { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); margin-bottom: 4px; }
+  .mo-total-line { font-size: 17px !important; font-weight: 800; color: var(--ink) !important; margin-top: 6px; }
+  .timeline { display: flex; flex-direction: column; gap: 8px; }
+  .tl-item { display: flex; align-items: center; gap: 10px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -403,6 +427,9 @@
       <p>Du lundi au samedi, 9h – 20h.</p>
     </div>
   </section>
+
+  <!-- Vue Mes commandes (remplie dynamiquement) -->
+  <section class="view" id="view-mescommandes"></section>
 </main>
 
 <!-- Boutons flottants -->
@@ -457,6 +484,11 @@
   let editingProfile = false;
   let authMode   = "login";     // 'login' | 'signup' (écran compte non connecté)
   let authBusy   = false;       // anti double-soumission connexion/inscription
+  let MY_ORDERS  = [];          // commandes du client connecté
+  let myOrderView = "list";     // 'list' | 'detail'
+  let currentOrder = null;
+  const ORDER_STATUS_LABELS = { en_attente: "En attente", confirmee: "Confirmée", en_livraison: "En livraison", livree: "Livrée", annulee: "Annulée" };
+  const statusLabel = (v) => ORDER_STATUS_LABELS[v] || v;
 
   /* ===== Régions et quartiers du Sénégal ===== */
   const REGIONS = ["Dakar", "Thiès", "Saint-Louis", "Diourbel", "Louga", "Fatick", "Kaolack",
@@ -880,6 +912,7 @@
           <h3>${esc(PROFILE.fullName || "Mon profil")}</h3>
           <p class="pf-line">📍 ${esc(PROFILE.quartier)}, ${esc(PROFILE.region)}</p>
           <p class="pf-line">📞 +221 ${esc(PROFILE.phone)}</p>
+          ${PROFILE.token ? '<button class="btn-primary" data-go="mescommandes" style="width:100%;margin:8px 0 12px">📦 Mes commandes</button>' : '<p class="pf-hint">Crée un compte (mot de passe) pour suivre tes commandes.</p>'}
           <button class="btn-line-pf" data-profil-edit>Modifier mes informations</button>
           <button class="btn-line-pf" data-profil-logout style="margin-left:8px">Se déconnecter</button>
         </div>`;
@@ -938,6 +971,83 @@
     applyProfileUI();
     renderProfile();
     toast("Déconnecté");
+  }
+
+  /* ===== Mes commandes (client) ===== */
+  function mcBack(target) {
+    const label = target === "list" ? "Mes commandes" : "Retour au profil";
+    const attr = target === "list" ? "data-mo-back" : `data-go="${target}"`;
+    return `<button class="pd-back" ${attr}>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      ${label}</button>`;
+  }
+
+  async function loadMyOrders() {
+    const view = $("#view-mescommandes"); if (!view) return;
+    const head = mcBack("compte") + '<h2 class="view-title">Mes commandes</h2>';
+    if (!PROFILE || !PROFILE.token) {
+      view.innerHTML = head + '<div class="empty"><p>Connecte-toi avec ton compte (mot de passe) pour suivre tes commandes.</p></div>';
+      return;
+    }
+    view.innerHTML = head + '<p class="pf-hint" style="padding:0 4px">Chargement…</p>';
+    const { data, error } = await sb.rpc("mes_commandes", { p_token: PROFILE.token });
+    if (error) {
+      view.innerHTML = head + `<div class="empty"><p>${esc(error.message || "Impossible de charger les commandes.")}</p></div>`;
+      return;
+    }
+    MY_ORDERS = Array.isArray(data) ? data : [];
+    myOrderView = "list"; currentOrder = null;
+    renderMyOrders();
+  }
+
+  function renderMyOrders() {
+    const view = $("#view-mescommandes"); if (!view) return;
+    if (myOrderView === "detail" && currentOrder) { view.innerHTML = myOrderDetailHtml(currentOrder); return; }
+    const head = mcBack("compte") + '<h2 class="view-title">Mes commandes</h2>';
+    if (!MY_ORDERS.length) {
+      view.innerHTML = head + `<div class="empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+        <p>Aucune commande pour l'instant.</p></div>`;
+      return;
+    }
+    const rows = MY_ORDERS.map((o) => `
+      <button class="mo-row" data-mo="${esc(o.id)}">
+        <div><div class="mo-ref">${esc(o.reference)}</div><div class="mo-date">${new Date(o.created_at).toLocaleDateString("fr-FR")}</div></div>
+        <div class="mo-right"><div class="mo-total">${fmt(o.total)}</div><span class="status-badge s-${esc(o.status)}">${statusLabel(o.status)}</span></div>
+      </button>`).join("");
+    view.innerHTML = head + `<div class="mo-list">${rows}</div>`;
+  }
+
+  function myOrderDetailHtml(o) {
+    const items = (o.items || []).map((it) => `
+      <div class="oi-row">
+        <div>${esc(it.product_name)}${it.variant_label ? ` <span class="muted">· ${esc(it.variant_label)}</span>` : ""}</div>
+        <div class="mo-right">${it.quantity} × ${fmt(it.unit_price)}</div>
+      </div>`).join("");
+    const hist = (o.history || []).map((h) => `
+      <div class="tl-item"><span class="status-badge s-${esc(h.new_status)}">${statusLabel(h.new_status)}</span>
+        <span class="muted">${new Date(h.created_at).toLocaleString("fr-FR")}</span></div>`).join("");
+    return mcBack("list") + `
+      <h2 class="view-title">${esc(o.reference)} <span class="status-badge s-${esc(o.status)}">${statusLabel(o.status)}</span></h2>
+      <div class="account-card">
+        <h3>Articles</h3>
+        ${items || '<p class="pf-hint">—</p>'}
+        <div class="mo-totals">
+          <div><span>Sous-total</span><span>${fmt(o.subtotal)}</span></div>
+          ${o.discount ? `<div><span>Remise</span><span>− ${fmt(o.discount)}</span></div>` : ""}
+          <div><span>Livraison${o.zone ? " (" + esc(o.zone) + ")" : ""}</span><span>${o.delivery_fee ? fmt(o.delivery_fee) : "Offerte"}</span></div>
+          <div class="mo-total-line"><span>Total</span><span>${fmt(o.total)}</span></div>
+        </div>
+      </div>
+      <div class="account-card">
+        <h3>Suivi de la commande</h3>
+        <div class="timeline">${hist || '<p class="pf-hint">—</p>'}</div>
+      </div>`;
+  }
+
+  function openMyOrder(id) {
+    currentOrder = MY_ORDERS.find((o) => String(o.id) === String(id)) || null;
+    if (currentOrder) { myOrderView = "detail"; renderMyOrders(); }
   }
 
   /* ===== Comptes clients (téléphone + mot de passe à 6 chiffres, sans OTP) ===== */
@@ -1005,6 +1115,7 @@
       region: acc.region || REGIONS[0],
       quartier: acc.quartier || "",
       phone: acc.phone || "",
+      token: acc.token || (PROFILE && PROFILE.token) || null, // jeton de session client
     };
     localStorage.setItem("psn_profile", JSON.stringify(PROFILE));
   }
@@ -1072,6 +1183,7 @@
     if (view === "panier") renderCart();
     if (view === "favoris") renderFavs();
     if (view === "compte") renderProfile();
+    if (view === "mescommandes") { store.prevView = "compte"; loadMyOrders(); }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function isView(name) { const el = $("#view-" + name); return el && el.classList.contains("active"); }
@@ -1223,9 +1335,11 @@
       "[data-add],[data-fav],[data-inc],[data-dec],[data-del],[data-go],[data-cat]," +
       "[data-open],[data-back],[data-vcolor],[data-vstorage],[data-vmodel],[data-thumb]," +
       "[data-checkout],[data-pay],[data-order],[data-profil-save],[data-profil-edit],[data-profil-logout]," +
-      "[data-auth-login],[data-auth-signup],[data-auth-switch],#submit-order");
+      "[data-auth-login],[data-auth-signup],[data-auth-switch],[data-mo],[data-mo-back],#submit-order");
     if (!t) return;
-    if (t.hasAttribute("data-profil-save")) saveProfile();
+    if (t.dataset.mo) openMyOrder(t.dataset.mo);
+    else if (t.hasAttribute("data-mo-back")) { myOrderView = "list"; renderMyOrders(); }
+    else if (t.hasAttribute("data-profil-save")) saveProfile();
     else if (t.hasAttribute("data-profil-edit")) { editingProfile = true; renderProfile(); }
     else if (t.hasAttribute("data-profil-logout")) logoutProfile();
     else if (t.hasAttribute("data-auth-login")) doLogin();
