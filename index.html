@@ -922,7 +922,9 @@
           <h3>${esc(PROFILE.fullName || "Mon profil")}</h3>
           <p class="pf-line">📍 ${esc(PROFILE.quartier)}, ${esc(PROFILE.region)}</p>
           <p class="pf-line">📞 +221 ${esc(PROFILE.phone)}</p>
-          ${PROFILE.token ? '<button class="btn-primary" data-go="mescommandes" style="width:100%;margin:8px 0 12px">📦 Mes commandes</button>' : '<p class="pf-hint">Crée un compte (mot de passe) pour suivre tes commandes.</p>'}
+          ${PROFILE.token
+            ? '<button class="btn-primary" data-go="mescommandes" style="width:100%;margin:8px 0 12px">📦 Mes commandes</button>'
+            : '<button class="btn-primary" data-account-login style="width:100%;margin:8px 0 12px">Me connecter à mon compte</button><p class="pf-hint">Connecte-toi (téléphone + mot de passe) pour suivre tes commandes.</p>'}
           <button class="btn-line-pf" data-profil-edit>Modifier mes informations</button>
           <button class="btn-line-pf" data-profil-logout style="margin-left:8px">Se déconnecter</button>
         </div>`;
@@ -981,6 +983,14 @@
     applyProfileUI();
     renderProfile();
     toast("Déconnecté");
+  }
+  // Profil local sans compte -> bascule vers l'écran de connexion au compte.
+  function goToAccountLogin() {
+    PROFILE = null;
+    localStorage.removeItem("psn_profile");
+    editingProfile = false; authMode = "login";
+    applyProfileUI();
+    renderProfile();
   }
 
   /* ===== Mes commandes (client) ===== */
@@ -1345,9 +1355,10 @@
       "[data-add],[data-fav],[data-inc],[data-dec],[data-del],[data-go],[data-cat]," +
       "[data-open],[data-back],[data-vcolor],[data-vstorage],[data-vmodel],[data-thumb]," +
       "[data-checkout],[data-pay],[data-order],[data-profil-save],[data-profil-edit],[data-profil-logout]," +
-      "[data-auth-login],[data-auth-signup],[data-auth-switch],[data-mo],[data-mo-back],#submit-order");
+      "[data-auth-login],[data-auth-signup],[data-auth-switch],[data-mo],[data-mo-back],[data-account-login],#submit-order");
     if (!t) return;
-    if (t.dataset.mo) openMyOrder(t.dataset.mo);
+    if (t.hasAttribute("data-account-login")) goToAccountLogin();
+    else if (t.dataset.mo) openMyOrder(t.dataset.mo);
     else if (t.hasAttribute("data-mo-back")) { myOrderView = "list"; renderMyOrders(); }
     else if (t.hasAttribute("data-profil-save")) saveProfile();
     else if (t.hasAttribute("data-profil-edit")) { editingProfile = true; renderProfile(); }
