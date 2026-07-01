@@ -53,8 +53,9 @@
     display: flex; align-items: center; justify-content: space-between;
     gap: 12px; padding: 14px 16px 10px;
   }
-  .logo { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+  .logo { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; transition: transform .2s ease, opacity .2s ease; }
   .logo .dot { color: var(--green); }
+  .logo.logo-hold { transform: scale(.94); opacity: .6; }
   .logo span.b { color: var(--ink); }
   .header-actions { display: flex; gap: 10px; }
   .icon-btn {
@@ -365,7 +366,7 @@
 <header>
   <div class="container">
     <div class="header-top">
-      <div class="logo"><span class="b">portable</span><span class="dot">.sn</span></div>
+      <div class="logo" id="logo"><span class="b">portable</span><span class="dot">.sn</span></div>
       <div class="header-actions">
         <button class="icon-btn" data-go="favoris" aria-label="Favoris">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/></svg>
@@ -1383,6 +1384,41 @@
     else if (t.dataset.go) go(t.dataset.go);
     else if (t.dataset.cat) { store.cat = t.dataset.cat; renderCats(); renderGrid(); go("accueil"); }
   });
+
+  // Accès admin masqué : appui long (3 s) sur le logo, uniquement si le client
+  // connecté correspond au numéro autorisé. NB : ce geste n'est qu'un raccourci —
+  // la vraie protection reste la connexion admin (Supabase Auth) dans admin.html.
+  (function setupAdminGesture() {
+    const ADMIN_GESTURE_PHONE = "776964876";
+    const logo = $("#logo");
+    if (!logo) return;
+    logo.style.userSelect = "none";
+    logo.style.webkitUserSelect = "none";
+    logo.style.cursor = "pointer";
+    let timer = null;
+    const norm = (v) => String(v == null ? "" : v).replace(/\D/g, "").slice(-9);
+    const cancel = () => {
+      if (timer) { clearTimeout(timer); timer = null; }
+      logo.classList.remove("logo-hold");
+    };
+    const start = (e) => {
+      if (e && e.type === "pointerdown" && e.button !== undefined && e.button !== 0) return;
+      cancel();
+      logo.classList.add("logo-hold");
+      timer = setTimeout(() => {
+        cancel();
+        if (norm(PROFILE && PROFILE.phone) === ADMIN_GESTURE_PHONE) {
+          toast("Ouverture de l'espace admin…");
+          setTimeout(() => { window.location.href = "admin.html"; }, 350);
+        }
+        // Sinon : rien (le raccourci reste invisible aux autres visiteurs).
+      }, 3000);
+    };
+    logo.addEventListener("pointerdown", start);
+    logo.addEventListener("pointerup", cancel);
+    logo.addEventListener("pointerleave", cancel);
+    logo.addEventListener("pointercancel", cancel);
+  })();
 
   // Changements de sélecteurs (zone de livraison, région/quartier du profil)
   document.addEventListener("change", (e) => {
