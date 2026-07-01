@@ -1400,13 +1400,12 @@
     else if (t.dataset.cat) { store.cat = t.dataset.cat; renderCats(); renderGrid(); go("accueil"); }
   });
 
-  // Accès admin masqué : appui long (3 s) sur le logo, uniquement si le client
-  // connecté correspond au numéro autorisé, PUIS saisie du mot de passe admin.
-  // Le mot de passe est vérifié côté serveur (Supabase Auth) — aucun secret n'est
-  // écrit dans cette page. La connexion admin de admin.html reste la vraie barrière.
+  // Accès admin masqué : appui long (3 s) sur le logo -> fenêtre demandant le
+  // numéro autorisé + le mot de passe. Le numéro doit figurer dans la liste des
+  // accès (gérée par le propriétaire) ; l'email lié est résolu côté serveur, puis
+  // la connexion est vérifiée par Supabase Auth. Aucun secret n'est écrit ici, et
+  // la connexion admin de admin.html reste la vraie barrière.
   (function setupAdminGesture() {
-    const ADMIN_GESTURE_PHONE = "776964876";
-    const ADMIN_EMAIL = "moustapha0693@gmail.com";
     const logo = $("#logo");
     if (!logo) return;
     logo.style.userSelect = "none";
@@ -1414,16 +1413,16 @@
     logo.style.cursor = "pointer";
     const norm = (v) => String(v == null ? "" : v).replace(/\D/g, "").slice(-9);
 
-    // Construit la fenêtre de saisie du mot de passe (une seule fois).
-    let gate, input, errEl, okBtn;
+    let gate, phoneEl, passEl, errEl, okBtn;
     function buildGate() {
       gate = document.createElement("div");
       gate.className = "admin-gate";
       gate.innerHTML =
         '<div class="admin-gate-box">' +
           '<h3>Espace admin</h3>' +
-          '<p>Saisis ton mot de passe pour continuer.</p>' +
-          '<input type="password" autocomplete="current-password" placeholder="Mot de passe" />' +
+          '<p>Saisis ton numéro et ton mot de passe.</p>' +
+          '<input type="tel" inputmode="numeric" class="ag-phone" autocomplete="off" placeholder="Ton numéro" />' +
+          '<input type="password" class="ag-pass" autocomplete="current-password" placeholder="Mot de passe" style="margin-top:8px" />' +
           '<div class="admin-gate-err"></div>' +
           '<div class="admin-gate-actions">' +
             '<button type="button" class="ag-cancel">Annuler</button>' +
@@ -1431,38 +1430,52 @@
           '</div>' +
         '</div>';
       document.body.appendChild(gate);
-      input = gate.querySelector("input");
+      phoneEl = gate.querySelector(".ag-phone");
+      passEl = gate.querySelector(".ag-pass");
       errEl = gate.querySelector(".admin-gate-err");
       okBtn = gate.querySelector(".ag-ok");
       gate.querySelector(".ag-cancel").addEventListener("click", closeGate);
       gate.addEventListener("click", (e) => { if (e.target === gate) closeGate(); });
       okBtn.addEventListener("click", submitGate);
-      input.addEventListener("keydown", (e) => { if (e.key === "Enter") submitGate(); });
+      const onEnter = (e) => { if (e.key === "Enter") submitGate(); };
+      phoneEl.addEventListener("keydown", onEnter);
+      passEl.addEventListener("keydown", onEnter);
     }
     function openGate() {
       if (!gate) buildGate();
-      input.value = ""; errEl.textContent = ""; input.classList.remove("err");
+      // Pré-remplit le numéro si un client est connecté (raccourci pour le propriétaire).
+      phoneEl.value = (PROFILE && PROFILE.phone) ? norm(PROFILE.phone) : "";
+      passEl.value = ""; errEl.textContent = "";
+      phoneEl.classList.remove("err"); passEl.classList.remove("err");
       okBtn.disabled = false; okBtn.textContent = "Entrer";
       gate.classList.add("show");
-      setTimeout(() => input.focus(), 50);
+      setTimeout(() => (phoneEl.value ? passEl : phoneEl).focus(), 50);
     }
     function closeGate() { if (gate) gate.classList.remove("show"); }
-    function fail(msg) {
-      errEl.textContent = msg; input.classList.add("err");
+    function fail(msg, el) {
+      errEl.textContent = msg;
       okBtn.disabled = false; okBtn.textContent = "Entrer";
-      input.focus(); input.select();
-      setTimeout(() => input.classList.remove("err"), 350);
+      const target = el || passEl;
+      target.classList.add("err"); target.focus(); target.select && target.select();
+      setTimeout(() => target.classList.remove("err"), 350);
     }
     async function submitGate() {
-      const pwd = input.value.trim();
-      if (!pwd) return fail("Mot de passe requis.");
+      const phone = norm(phoneEl.value);
+      const pwd = passEl.value.trim();
+      if (phone.length !== 9) return fail("Numéro invalide (9 chiffres).", phoneEl);
+      if (!pwd) return fail("Mot de passe requis.", passEl);
       okBtn.disabled = true; okBtn.textContent = "Vérification…"; errEl.textContent = "";
       try {
-        const { error } = await sb.auth.signInWithPassword({ email: ADMIN_EMAIL, password: pwd });
-        if (error) return fail("Mot de passe incorrect.");
+        // 1) Le numéro est-il autorisé ? -> email du compte lié.
+        const { data: email, error: e0 } = await sb.rpc("admin_login_email", { p_phone: phone });
+        if (e0) return fail("Connexion impossible. Réessaie.");
+        if (!email) return fail("Ce numéro n'a pas accès à l'espace admin.", phoneEl);
+        // 2) Vérifie le mot de passe côté serveur.
+        const { error } = await sb.auth.signInWithPassword({ email: email, password: pwd });
+        if (error) return fail("Mot de passe incorrect.", passEl);
+        // 3) Double contrôle du rôle admin.
         const { data: isAdmin, error: e2 } = await sb.rpc("is_admin");
         if (e2 || !isAdmin) { await sb.auth.signOut(); return fail("Accès refusé."); }
-        // Succès : la session est enregistrée, admin.html entre directement.
         window.location.href = "admin.html";
       } catch (_) { fail("Connexion impossible. Réessaie."); }
     }
@@ -1476,11 +1489,7 @@
       if (e && e.type === "pointerdown" && e.button !== undefined && e.button !== 0) return;
       cancelHold();
       logo.classList.add("logo-hold");
-      timer = setTimeout(() => {
-        cancelHold();
-        // Le geste ne s'active que pour le numéro autorisé (raccourci discret).
-        if (norm(PROFILE && PROFILE.phone) === ADMIN_GESTURE_PHONE) openGate();
-      }, 3000);
+      timer = setTimeout(() => { cancelHold(); openGate(); }, 3000);
     };
     logo.addEventListener("pointerdown", startHold);
     logo.addEventListener("pointerup", cancelHold);
