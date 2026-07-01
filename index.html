@@ -1466,14 +1466,23 @@
       if (!pwd) return fail("Mot de passe requis.", passEl);
       okBtn.disabled = true; okBtn.textContent = "Vérification…"; errEl.textContent = "";
       try {
-        // 1) Le numéro est-il autorisé ? -> email du compte lié.
-        const { data: email, error: e0 } = await sb.rpc("admin_login_email", { p_phone: phone });
+        // 1) Quel type d'accès pour ce numéro ?
+        const { data: kind, error: e0 } = await sb.rpc("admin_account_kind", { p_phone: phone });
         if (e0) return fail("Connexion impossible. Réessaie.");
-        if (!email) return fail("Ce numéro n'a pas accès à l'espace admin.", phoneEl);
-        // 2) Vérifie le mot de passe côté serveur.
-        const { error } = await sb.auth.signInWithPassword({ email: email, password: pwd });
-        if (error) return fail("Mot de passe incorrect.", passEl);
-        // 3) Double contrôle du rôle admin.
+        if (!kind) return fail("Ce numéro n'a pas accès à l'espace admin.", phoneEl);
+        if (kind.kind === "owner") {
+          // Propriétaire : mot de passe de son compte Supabase.
+          const { error } = await sb.auth.signInWithPassword({ email: kind.email, password: pwd });
+          if (error) return fail("Mot de passe incorrect.", passEl);
+        } else {
+          // Assistant : mot de passe de la boutique -> pont serveur -> session admin.
+          const { data: br, error: be } = await sb.functions.invoke("assistant-login", { body: { phone: phone, pin: pwd } });
+          if (be || !br) return fail("Connexion impossible. Réessaie.");
+          if (!br.ok) return fail(br.error || "Accès refusé.", passEl);
+          const { error: ve } = await sb.auth.verifyOtp({ token_hash: br.token_hash, type: "magiclink" });
+          if (ve) return fail("Connexion impossible. Réessaie.");
+        }
+        // 2) Double contrôle du rôle admin, puis ouverture.
         const { data: isAdmin, error: e2 } = await sb.rpc("is_admin");
         if (e2 || !isAdmin) { await sb.auth.signOut(); return fail("Accès refusé."); }
         window.location.href = "admin.html";

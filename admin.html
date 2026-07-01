@@ -238,14 +238,12 @@
 
     <section id="tab-acces" hidden>
       <div class="head-row"><h2>Accès autorisés</h2></div>
-      <p class="hint" style="margin:0 0 12px">Chaque numéro autorisé peut ouvrir l'espace admin (appui long sur le logo de la boutique, puis numéro + mot de passe). Le mot de passe est celui du compte Supabase associé à l'email. <b>Crée d'abord le compte</b> dans Supabase (Authentication → Add user), puis ajoute-le ici. Supprimer un accès retire immédiatement les droits admin.</p>
+      <p class="hint" style="margin:0 0 12px">La personne crée d'abord un <b>compte normal sur la boutique</b> (numéro + mot de passe), puis tu ajoutes son <b>numéro</b> ici. Elle pourra ensuite ouvrir l'espace admin : <b>appui long sur le logo</b> de la boutique, puis son <b>numéro + son mot de passe boutique</b>. Supprimer un accès retire immédiatement les droits admin.</p>
       <div class="access-form" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:16px">
         <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)">Numéro
           <input id="am-phone" type="tel" inputmode="numeric" placeholder="77 000 00 00" style="min-width:150px" /></label>
-        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)">Email du compte
-          <input id="am-email" type="email" placeholder="personne@email.com" style="min-width:200px" /></label>
-        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)">Nom (facultatif)
-          <input id="am-label" type="text" placeholder="ex. Fatou (vendeuse)" style="min-width:160px" /></label>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)">Note / rôle (facultatif)
+          <input id="am-label" type="text" placeholder="ex. Fatou (vendeuse)" style="min-width:200px" /></label>
         <button class="btn btn-blue" data-action="add-access">+ Ajouter l'accès</button>
       </div>
       <div class="ptable" id="atable"></div>
@@ -744,26 +742,24 @@
   }
   function renderMembers() {
     const rows = (state.members || []).map((m) => {
-      const owner = m.is_owner;
-      const del = owner
+      const who = [m.name, m.label].filter(Boolean).map(esc).join(" · ");
+      const del = m.is_owner
         ? '<span class="hint">Propriétaire</span>'
         : '<button class="btn btn-line btn-sm" data-action="remove-access" data-phone="' + esc(m.phone) + '">Supprimer</button>';
       return '<div class="orow" style="display:flex;justify-content:space-between;align-items:center;gap:12px">' +
-        '<div><b>' + esc(m.phone) + '</b>' + (m.label ? ' — ' + esc(m.label) : '') +
-        '<div class="hint">' + esc(m.email) + '</div></div>' +
+        '<div><b>' + esc(m.phone) + '</b>' + (who ? ' — ' + who : '') +
+        (m.is_owner ? '' : (m.name ? '' : '<div class="hint">compte boutique introuvable</div>')) + '</div>' +
         '<div>' + del + '</div></div>';
     }).join("");
     $("#atable").innerHTML = rows || '<div class="orow"><div class="hint">Aucun accès.</div></div>';
   }
   async function addMember() {
     const phone = ($("#am-phone").value || "").replace(/\D/g, "");
-    const email = ($("#am-email").value || "").trim();
     const label = ($("#am-label").value || "").trim();
     if (phone.length < 9) return toast("Numéro invalide (9 chiffres).");
-    if (!email) return toast("Indique l'email du compte.");
-    const { error } = await sb.rpc("admin_member_add", { p_phone: phone, p_email: email, p_label: label });
+    const { error } = await sb.rpc("admin_member_add", { p_phone: phone, p_label: label });
     if (error) return toast(friendlyErr ? friendlyErr(error) : error.message);
-    $("#am-phone").value = ""; $("#am-email").value = ""; $("#am-label").value = "";
+    $("#am-phone").value = ""; $("#am-label").value = "";
     toast("Accès ajouté ✓");
     await loadMembers();
   }
