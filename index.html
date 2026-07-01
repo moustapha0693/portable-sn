@@ -948,12 +948,13 @@
     if (!name) return toast("Indique ton nom complet.");
     if (!quartier) return toast("Indique ton quartier.");
     const phone = PROFILE ? PROFILE.phone : "";
-    PROFILE = { fullName: name, region, quartier, phone };
+    const token = PROFILE ? PROFILE.token : null;
+    PROFILE = { fullName: name, region, quartier, phone, token }; // conserve le jeton
     localStorage.setItem("psn_profile", JSON.stringify(PROFILE));
     editingProfile = false;
-    if (phone) {
+    if (token) {
       const { error } = await sb.rpc("maj_profil_client",
-        { p_phone: phone, p_full_name: name, p_region: region, p_quartier: quartier });
+        { p_token: token, p_full_name: name, p_region: region, p_quartier: quartier });
       if (error) console.error("maj_profil_client:", error);
     }
     toast("Profil enregistré ✓");
