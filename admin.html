@@ -725,8 +725,13 @@
 
   function renderOrders() {
     const q = state.oquery.trim().toLowerCase();
-    const list = state.orders.filter((o) =>
-      !q || (o.reference + " " + o.customer_name + " " + o.customer_phone).toLowerCase().includes(q));
+    const qDigits = q.replace(/\D/g, "");
+    const list = state.orders.filter((o) => {
+      if (!q) return true;
+      const hay = (o.reference + " " + (o.customer_name || "") + " " + (o.customer_phone || "")).toLowerCase();
+      // correspondance texte OU par les chiffres du numéro de commande (ex. "2", "000002")
+      return hay.includes(q) || (qDigits && o.reference.replace(/\D/g, "").includes(qDigits));
+    });
     const rows = list.map((o) => `
       <div class="orow" data-action="open-order" data-id="${o.id}">
         <div><div class="pname">${esc(o.reference)}</div><div class="pbrand">${esc(o.customer_name)} · ${esc(o.customer_phone)}</div></div>
@@ -734,9 +739,11 @@
         <div class="ocol-date">${new Date(o.created_at).toLocaleDateString("fr-FR")}</div>
         <div><span class="status-badge s-${o.status}">${statusLabel(o.status)}</span></div>
       </div>`).join("");
+    const count = q ? `<div class="hint" style="padding:8px 14px">${list.length} résultat(s) pour « ${esc(state.oquery.trim())} »</div>` : "";
     $("#otable").innerHTML =
       `<div class="orow header"><div>Commande</div><div class="right">Total</div><div class="ocol-date">Date</div><div>Statut</div></div>` +
-      (rows || '<div class="orow"><div class="hint">Aucune commande.</div></div>');
+      count +
+      (rows || `<div class="orow"><div class="hint">${q ? "Aucune commande trouvée." : "Aucune commande."}</div></div>`);
   }
 
   function openOrder(id) {
