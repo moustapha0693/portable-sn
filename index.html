@@ -56,6 +56,21 @@
   .logo { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; transition: transform .2s ease, opacity .2s ease; }
   .logo .dot { color: var(--green); }
   .logo.logo-hold { transform: scale(.94); opacity: .6; }
+  /* Porte d'accès admin (saisie du mot de passe après l'appui long) */
+  .admin-gate { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
+  .admin-gate.show { display: flex; }
+  .admin-gate-box { background: var(--card); border-radius: var(--radius); padding: 22px; width: 100%; max-width: 320px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+  .admin-gate-box h3 { margin: 0 0 4px; font-size: 18px; color: var(--ink); }
+  .admin-gate-box p { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+  .admin-gate-box input { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 16px; box-sizing: border-box; color: var(--ink); background: var(--bg); }
+  .admin-gate-box input.err { border-color: #dc2626; animation: agShake .3s; }
+  .admin-gate-err { color: #dc2626; font-size: 12px; min-height: 15px; margin: 6px 2px 0; }
+  .admin-gate-actions { display: flex; gap: 10px; margin-top: 14px; }
+  .admin-gate-actions button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: 700; font-size: 15px; cursor: pointer; }
+  .ag-cancel { background: var(--bg); color: var(--ink); border: 1px solid var(--line) !important; }
+  .ag-ok { background: var(--green); color: #fff; }
+  .ag-ok:disabled { opacity: .6; cursor: default; }
+  @keyframes agShake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
   .logo span.b { color: var(--ink); }
   .header-actions { display: flex; gap: 10px; }
   .icon-btn {
@@ -1386,38 +1401,91 @@
   });
 
   // Accès admin masqué : appui long (3 s) sur le logo, uniquement si le client
-  // connecté correspond au numéro autorisé. NB : ce geste n'est qu'un raccourci —
-  // la vraie protection reste la connexion admin (Supabase Auth) dans admin.html.
+  // connecté correspond au numéro autorisé, PUIS saisie du mot de passe admin.
+  // Le mot de passe est vérifié côté serveur (Supabase Auth) — aucun secret n'est
+  // écrit dans cette page. La connexion admin de admin.html reste la vraie barrière.
   (function setupAdminGesture() {
     const ADMIN_GESTURE_PHONE = "776964876";
+    const ADMIN_EMAIL = "moustapha0693@gmail.com";
     const logo = $("#logo");
     if (!logo) return;
     logo.style.userSelect = "none";
     logo.style.webkitUserSelect = "none";
     logo.style.cursor = "pointer";
-    let timer = null;
     const norm = (v) => String(v == null ? "" : v).replace(/\D/g, "").slice(-9);
-    const cancel = () => {
+
+    // Construit la fenêtre de saisie du mot de passe (une seule fois).
+    let gate, input, errEl, okBtn;
+    function buildGate() {
+      gate = document.createElement("div");
+      gate.className = "admin-gate";
+      gate.innerHTML =
+        '<div class="admin-gate-box">' +
+          '<h3>Espace admin</h3>' +
+          '<p>Saisis ton mot de passe pour continuer.</p>' +
+          '<input type="password" autocomplete="current-password" placeholder="Mot de passe" />' +
+          '<div class="admin-gate-err"></div>' +
+          '<div class="admin-gate-actions">' +
+            '<button type="button" class="ag-cancel">Annuler</button>' +
+            '<button type="button" class="ag-ok">Entrer</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(gate);
+      input = gate.querySelector("input");
+      errEl = gate.querySelector(".admin-gate-err");
+      okBtn = gate.querySelector(".ag-ok");
+      gate.querySelector(".ag-cancel").addEventListener("click", closeGate);
+      gate.addEventListener("click", (e) => { if (e.target === gate) closeGate(); });
+      okBtn.addEventListener("click", submitGate);
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") submitGate(); });
+    }
+    function openGate() {
+      if (!gate) buildGate();
+      input.value = ""; errEl.textContent = ""; input.classList.remove("err");
+      okBtn.disabled = false; okBtn.textContent = "Entrer";
+      gate.classList.add("show");
+      setTimeout(() => input.focus(), 50);
+    }
+    function closeGate() { if (gate) gate.classList.remove("show"); }
+    function fail(msg) {
+      errEl.textContent = msg; input.classList.add("err");
+      okBtn.disabled = false; okBtn.textContent = "Entrer";
+      input.focus(); input.select();
+      setTimeout(() => input.classList.remove("err"), 350);
+    }
+    async function submitGate() {
+      const pwd = input.value.trim();
+      if (!pwd) return fail("Mot de passe requis.");
+      okBtn.disabled = true; okBtn.textContent = "Vérification…"; errEl.textContent = "";
+      try {
+        const { error } = await sb.auth.signInWithPassword({ email: ADMIN_EMAIL, password: pwd });
+        if (error) return fail("Mot de passe incorrect.");
+        const { data: isAdmin, error: e2 } = await sb.rpc("is_admin");
+        if (e2 || !isAdmin) { await sb.auth.signOut(); return fail("Accès refusé."); }
+        // Succès : la session est enregistrée, admin.html entre directement.
+        window.location.href = "admin.html";
+      } catch (_) { fail("Connexion impossible. Réessaie."); }
+    }
+
+    let timer = null;
+    const cancelHold = () => {
       if (timer) { clearTimeout(timer); timer = null; }
       logo.classList.remove("logo-hold");
     };
-    const start = (e) => {
+    const startHold = (e) => {
       if (e && e.type === "pointerdown" && e.button !== undefined && e.button !== 0) return;
-      cancel();
+      cancelHold();
       logo.classList.add("logo-hold");
       timer = setTimeout(() => {
-        cancel();
-        if (norm(PROFILE && PROFILE.phone) === ADMIN_GESTURE_PHONE) {
-          toast("Ouverture de l'espace admin…");
-          setTimeout(() => { window.location.href = "admin.html"; }, 350);
-        }
-        // Sinon : rien (le raccourci reste invisible aux autres visiteurs).
+        cancelHold();
+        // Le geste ne s'active que pour le numéro autorisé (raccourci discret).
+        if (norm(PROFILE && PROFILE.phone) === ADMIN_GESTURE_PHONE) openGate();
       }, 3000);
     };
-    logo.addEventListener("pointerdown", start);
-    logo.addEventListener("pointerup", cancel);
-    logo.addEventListener("pointerleave", cancel);
-    logo.addEventListener("pointercancel", cancel);
+    logo.addEventListener("pointerdown", startHold);
+    logo.addEventListener("pointerup", cancelHold);
+    logo.addEventListener("pointerleave", cancelHold);
+    logo.addEventListener("pointercancel", cancelHold);
   })();
 
   // Changements de sélecteurs (zone de livraison, région/quartier du profil)
