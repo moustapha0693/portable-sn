@@ -575,7 +575,7 @@
   // En cas d'URL cassée, l'<img> est remplacée automatiquement par l'icône.
   function mediaHtml(p) {
     if (p.image) {
-      return `<img src="${p.image}" alt="${p.brand} ${p.name}" loading="lazy" onerror="this.outerHTML=window.psnPlaceholder('${p.category}')">`;
+      return `<img src="${p.image}" alt="${esc(p.brand)} ${esc(p.name)}" loading="lazy" onerror="this.outerHTML=window.psnPlaceholder('${p.category}')">`;
     }
     return mediaSvg(p.category);
   }
@@ -618,7 +618,7 @@
           ${mediaHtml(p)}
         </div>
         <div class="card-body">
-          <div class="name">${p.name}</div>
+          <div class="name">${esc(p.name)}</div>
           <div class="price-row">
             <div class="price-wrap">
               <span class="price">${fmt(p.price)}</span>
@@ -664,13 +664,13 @@
       const p = v.product;
       const q = store.cart[vid];
       total += v.price * q; count += q;
-      const variantLabel = (v.label && v.label !== "Standard") ? `<div class="cart-variant">${v.label}</div>` : "";
+      const variantLabel = (v.label && v.label !== "Standard") ? `<div class="cart-variant">${esc(v.label)}</div>` : "";
       return `
         <div class="cart-item">
           <div class="cart-thumb">${mediaHtml(p)}</div>
           <div class="cart-info">
-            <div class="brand">${p.brand}</div>
-            <div class="name">${p.name}</div>
+            <div class="brand">${esc(p.brand)}</div>
+            <div class="name">${esc(p.name)}</div>
             ${variantLabel}
             <div class="price">${fmt(v.price)}</div>
             <div class="qty">
@@ -1149,6 +1149,7 @@
     try {
       const { data, error } = await sb.rpc("connexion_client", { p_phone: d, p_pin: pin });
       if (error) { toast(error.message || "Connexion impossible."); return; }
+      if (!data || data.ok === false) { toast((data && data.error) || "Numéro ou mot de passe incorrect."); return; }
       setProfileFromAccount(data); editingProfile = false;
       toast("Connecté ✓"); applyProfileUI(); renderProfile();
     } catch (e) { console.error(e); toast("Connexion impossible."); }
@@ -1262,7 +1263,7 @@
     // Galerie
     const cur = store.detail.img && p.images.includes(store.detail.img) ? store.detail.img : (p.images[0] || null);
     const mainHtml = cur
-      ? `<img id="pd-main-img" src="${cur}" alt="${p.brand} ${p.name}" onerror="this.outerHTML=window.psnPlaceholder('${p.category}')">`
+      ? `<img id="pd-main-img" src="${cur}" alt="${esc(p.brand)} ${esc(p.name)}" onerror="this.outerHTML=window.psnPlaceholder('${p.category}')">`
       : `<div class="pd-main-ph">${mediaSvg(p.category)}</div>`;
     const thumbs = p.images.length > 1
       ? `<div class="pd-thumbs">${p.images.map((u) =>
@@ -1275,7 +1276,7 @@
     let selectors = "";
     if (colors.length) {
       selectors += `<div class="vgroup"><div class="vlabel">Couleur</div><div class="vchips">` +
-        colors.map((c) => `<button class="vchip ${c === store.detail.color ? "active" : ""}" data-vcolor="${c}">${c}</button>`).join("") +
+        colors.map((c) => `<button class="vchip ${c === store.detail.color ? "active" : ""}" data-vcolor="${esc(c)}">${esc(c)}</button>`).join("") +
         `</div></div>`;
     }
     if (storages.length) {
@@ -1285,12 +1286,12 @@
       selectors += `<div class="vgroup"><div class="vlabel">Capacité</div><div class="vchips">` +
         storages.map((s) => {
           const ok = avail.has(s);
-          return `<button class="vchip ${s === store.detail.storage ? "active" : ""} ${ok ? "" : "off"}" ${ok ? `data-vstorage="${s}"` : "disabled"}>${s}</button>`;
+          return `<button class="vchip ${s === store.detail.storage ? "active" : ""} ${ok ? "" : "off"}" ${ok ? `data-vstorage="${esc(s)}"` : "disabled"}>${esc(s)}</button>`;
         }).join("") + `</div></div>`;
     }
     if (!colors.length && !storages.length && p.variants.length > 1) {
       selectors += `<div class="vgroup"><div class="vlabel">Modèle</div><div class="vchips">` +
-        p.variants.map((x) => `<button class="vchip ${x.id === v.id ? "active" : ""}" data-vmodel="${x.id}">${x.label || "Variante"}</button>`).join("") +
+        p.variants.map((x) => `<button class="vchip ${x.id === v.id ? "active" : ""}" data-vmodel="${x.id}">${esc(x.label || "Variante")}</button>`).join("") +
         `</div></div>`;
     }
 
@@ -1315,8 +1316,8 @@
         ${thumbs}
       </div>
       <div class="pd-info">
-        <div class="brand">${p.brand}</div>
-        <h1 class="pd-name">${p.name}</h1>
+        <div class="brand">${esc(p.brand)}</div>
+        <h1 class="pd-name">${esc(p.name)}</h1>
         ${rating}
         <div class="pd-price-row">
           <span class="pd-price">${fmt(v.price || p.price)}</span>
@@ -1324,7 +1325,7 @@
         </div>
         ${stockHtml}
         ${selectors}
-        ${p.description ? `<p class="pd-desc">${p.description}</p>` : ""}
+        ${p.description ? `<p class="pd-desc">${esc(p.description)}</p>` : ""}
         <div class="pd-actions">
           <button class="order-btn pd-add" data-order="${out ? "" : v.id}" ${out ? "disabled" : ""}>
             ${out ? "INDISPONIBLE" : `<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg> Commander`}
