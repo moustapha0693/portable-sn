@@ -125,6 +125,8 @@
   }
   .tag.hot { background: var(--orange); }
   .tag.promo { background: var(--red); }
+  .tag.out { background: var(--muted); }
+  .card-out { opacity: .7; }
   .fav-btn {
     position: absolute; top: 8px; right: 8px; z-index: 2;
     width: 34px; height: 34px; border-radius: 999px; background: rgba(255,255,255,.92);
@@ -133,9 +135,10 @@
   }
   .fav-btn:active { transform: scale(.9); }
   .fav-btn.on { color: var(--red); }
-  .card-body { padding: 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .card-body { padding: 10px; display: flex; flex-direction: column; gap: 4px; }
   .brand { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .6px; text-transform: uppercase; }
-  .name { font-size: 14px; font-weight: 800; color: var(--blue); line-height: 1.25; }
+  .name { font-size: 14px; font-weight: 800; color: var(--blue); line-height: 1.25;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .stock { font-size: 12px; color: var(--orange); font-weight: 600; display: flex; align-items: center; gap: 5px; }
   .stock.out { color: var(--muted); }
   .stock .ic-dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; }
@@ -604,28 +607,18 @@
     if (discount > 0) tag = `<span class="tag promo">-${discount}%</span>`;
     else if (p.tag === "hot") tag = `<span class="tag hot">HOT</span>`;
 
-    const stockHtml = out
-      ? `<div class="stock out"><span class="ic-dot"></span> Rupture de stock</div>`
-      : (p.stock <= 5
-          ? `<div class="stock"><span class="ic-dot"></span> ${p.stock} en stock</div>`
-          : `<div class="stock" style="color:var(--green)"><span class="ic-dot"></span> En stock</div>`);
-
     const canBuy = !out && p.defaultVariantId;
-    const single = (p.variants || []).length === 1;
-    const cardAction = !canBuy ? "" : (single ? `data-order="${p.defaultVariantId}"` : `data-open="${p.id}"`);
     return `
-      <article class="card" data-open="${p.id}">
+      <article class="card ${out ? "card-out" : ""}" data-open="${p.id}">
         <div class="card-media">
-          ${tag}
+          ${out ? '<span class="tag out">Épuisé</span>' : tag}
           <button class="fav-btn ${isFav ? "on" : ""}" data-fav="${p.id}" aria-label="Favori">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="${isFav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/></svg>
           </button>
           ${mediaHtml(p)}
         </div>
         <div class="card-body">
-          <div class="brand">${p.brand}</div>
           <div class="name">${p.name}</div>
-          ${stockHtml}
           <div class="price-row">
             <div class="price-wrap">
               <span class="price">${fmt(p.price)}</span>
@@ -633,9 +626,6 @@
             </div>
             ${canBuy ? `<button class="add-mini" data-add="${p.defaultVariantId}" title="Ajouter au panier" aria-label="Ajouter au panier"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>` : ""}
           </div>
-          <button class="order-btn" ${cardAction} ${canBuy ? "" : "disabled"}>
-            ${out ? "INDISPONIBLE" : `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg> Commander`}
-          </button>
         </div>
       </article>`;
   }
