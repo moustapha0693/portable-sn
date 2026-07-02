@@ -1516,6 +1516,7 @@
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     const nrm = (p) => String(p == null ? "" : p).replace(/\D/g, "").slice(-9);
     let enabled = false;
+    let pushError = null;
     function login(phone) {
       const id = nrm(phone); if (!id) return;
       window.OneSignalDeferred.push(async (OneSignal) => { try { await OneSignal.login(id); } catch (e) {} });
@@ -1525,7 +1526,12 @@
     }
     function prompt() {
       const st = $("#notif-state");
-      if (!enabled) { if (st) st.textContent = "Notifications indisponibles pour le moment."; return; }
+      if (!enabled) {
+        if (st) st.textContent = pushError
+          ? "Notifications pas encore activées côté serveur. Réessaie bientôt."
+          : "Chargement… réessaie dans un instant.";
+        return;
+      }
       window.OneSignalDeferred.push(async (OneSignal) => {
         try { await OneSignal.Notifications.requestPermission(); if (st) st.textContent = "Merci ! Tu recevras les notifications importantes."; }
         catch (e) { if (st) st.textContent = "Activation refusée ou impossible."; }
@@ -1543,9 +1549,16 @@
         s.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
         s.defer = true; document.head.appendChild(s);
         window.OneSignalDeferred.push(async (OneSignal) => {
-          await OneSignal.init({ appId, allowLocalhostAsSecureOrigin: true });
-          enabled = true;
-          if (PROFILE && PROFILE.phone) login(PROFILE.phone); // relie la session en cours
+          try {
+            await OneSignal.init({ appId, allowLocalhostAsSecureOrigin: true });
+            enabled = true;
+            if (PROFILE && PROFILE.phone) login(PROFILE.phone); // relie la session en cours
+          } catch (e) {
+            // Ex. « App not configured for web push » = plateforme Web non configurée
+            // dans le tableau de bord OneSignal. On journalise pour diagnostic.
+            console.error("OneSignal init:", (e && e.message) ? e.message : e);
+            pushError = (e && e.message) ? e.message : String(e);
+          }
         });
       })
       .catch(() => {});
