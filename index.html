@@ -459,7 +459,9 @@
     <h2 class="view-title">Notifications</h2>
     <div class="empty">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-      <p>Les notifications arrivent bientôt.<br>Tu seras informé du statut de tes commandes et des promos.</p>
+      <p>Active les notifications pour suivre le statut de tes commandes et recevoir les promos.</p>
+      <button class="order-btn" id="notif-enable" style="max-width:280px;margin:4px auto 0">Activer les notifications</button>
+      <p id="notif-state" class="hint" style="margin-top:10px"></p>
     </div>
   </section>
 </main>
@@ -991,6 +993,7 @@
     }
   }
   function logoutProfile() {
+    if (window.psnPush) window.psnPush.logout();
     PROFILE = null;
     localStorage.removeItem("psn_profile");
     editingProfile = false;
@@ -1152,6 +1155,7 @@
       token: acc.token || (PROFILE && PROFILE.token) || null, // jeton de session client
     };
     localStorage.setItem("psn_profile", JSON.stringify(PROFILE));
+    if (window.psnPush) window.psnPush.login(PROFILE.phone); // lie les notifications au numéro
   }
 
   async function doLogin() {
@@ -1504,6 +1508,47 @@
     logo.addEventListener("pointerup", cancelHold);
     logo.addEventListener("pointerleave", cancelHold);
     logo.addEventListener("pointercancel", cancelHold);
+  })();
+
+  // Notifications push OneSignal (client). L'App ID est lu au runtime via l'Edge
+  // Function onesignal-config : aucune valeur OneSignal n'est écrite dans ce fichier.
+  (function setupPush() {
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    const nrm = (p) => String(p == null ? "" : p).replace(/\D/g, "").slice(-9);
+    let enabled = false;
+    function login(phone) {
+      const id = nrm(phone); if (!id) return;
+      window.OneSignalDeferred.push(async (OneSignal) => { try { await OneSignal.login(id); } catch (e) {} });
+    }
+    function logout() {
+      window.OneSignalDeferred.push(async (OneSignal) => { try { await OneSignal.logout(); } catch (e) {} });
+    }
+    function prompt() {
+      const st = $("#notif-state");
+      if (!enabled) { if (st) st.textContent = "Notifications indisponibles pour le moment."; return; }
+      window.OneSignalDeferred.push(async (OneSignal) => {
+        try { await OneSignal.Notifications.requestPermission(); if (st) st.textContent = "Merci ! Tu recevras les notifications importantes."; }
+        catch (e) { if (st) st.textContent = "Activation refusée ou impossible."; }
+      });
+    }
+    window.psnPush = { login, logout, prompt };
+    const btn = $("#notif-enable"); if (btn) btn.addEventListener("click", prompt);
+
+    // Récupère l'App ID puis charge le SDK et initialise.
+    fetch(SUPABASE_URL + "/functions/v1/onesignal-config")
+      .then((r) => r.json())
+      .then(({ appId }) => {
+        if (!appId) return; // OneSignal pas encore configuré (secrets non posés)
+        const s = document.createElement("script");
+        s.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+        s.defer = true; document.head.appendChild(s);
+        window.OneSignalDeferred.push(async (OneSignal) => {
+          await OneSignal.init({ appId, allowLocalhostAsSecureOrigin: true });
+          enabled = true;
+          if (PROFILE && PROFILE.phone) login(PROFILE.phone); // relie la session en cours
+        });
+      })
+      .catch(() => {});
   })();
 
   // Changements de sélecteurs (zone de livraison, région/quartier du profil)
