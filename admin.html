@@ -363,19 +363,13 @@
     if (!password) return fail("Mot de passe requis.");
     btn.disabled = true; btn.textContent = "Connexion…"; m.classList.remove("show");
     try {
-      const { data: kind, error: e0 } = await sb.rpc("admin_account_kind", { p_phone: phone });
-      if (e0) return fail("Connexion impossible. Réessaie.");
-      if (!kind) return fail("Ce numéro n'a pas accès à l'espace admin.");
-      if (kind.kind === "owner") {
-        const { error } = await sb.auth.signInWithPassword({ email: kind.email, password });
-        if (error) return fail("Mot de passe incorrect.");
-      } else {
-        const { data: br, error: be } = await sb.functions.invoke("assistant-login", { body: { phone, pin: password } });
-        if (be || !br) return fail("Connexion impossible. Réessaie.");
-        if (!br.ok) return fail(br.error || "Accès refusé.");
-        const { error: ve } = await sb.auth.verifyOtp({ token_hash: br.token_hash, type: "magiclink" });
-        if (ve) return fail("Connexion impossible. Réessaie.");
-      }
+      // Propriétaire comme assistant : numéro + mot de passe boutique -> pont
+      // serveur -> session admin. Un seul mot de passe (celui d'inscription).
+      const { data: br, error: be } = await sb.functions.invoke("assistant-login", { body: { phone, pin: password } });
+      if (be || !br) return fail("Connexion impossible. Réessaie.");
+      if (!br.ok) return fail(br.error || "Accès refusé.");
+      const { error: ve } = await sb.auth.verifyOtp({ token_hash: br.token_hash, type: "magiclink" });
+      if (ve) return fail("Connexion impossible. Réessaie.");
       const { data: isAdmin } = await sb.rpc("is_admin");
       if (!isAdmin) { await sb.auth.signOut(); return fail("Accès refusé."); }
       const { data: { session } } = await sb.auth.getSession();

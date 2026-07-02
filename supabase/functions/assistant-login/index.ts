@@ -42,10 +42,10 @@ Deno.serve(async (req: Request) => {
   const { data: v, error: ve } = await admin.rpc('assistant_verify', { p_phone: phone, p_pin: pin });
   if (ve) return json({ ok: false, error: 'Erreur serveur.' }, 200);
   if (!v || v.ok !== true) return json({ ok: false, error: (v && v.error) || 'Accès refusé.' }, 200);
-  if (v.is_owner === true) {
-    return json({ ok: false, error: 'Le propriétaire se connecte avec son mot de passe.' }, 200);
-  }
 
+  // Propriétaire comme assistant : le pont ouvre la session du compte lié
+  // (email réel pour le propriétaire = son compte is_owner ; synthétique sinon),
+  // à partir du code boutique. Aucun mot de passe Supabase distinct à retenir.
   const email = String(v.email);
 
   // 2) Crée le compte synthétique si besoin (mot de passe aléatoire, jamais utilisé).
