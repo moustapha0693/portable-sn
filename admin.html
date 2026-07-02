@@ -311,37 +311,9 @@
   function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show");
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2200); }
 
-  // Notifications push OneSignal (admin). App ID lu au runtime (onesignal-config),
-  // tag role=admin pour recevoir les alertes commandes / stock / avis.
-  const adminPush = (function () {
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    let started = false;
-    function start() {
-      if (started) return; started = true;
-      fetch(SUPABASE_URL + "/functions/v1/onesignal-config").then((r) => r.json()).then(({ appId }) => {
-        if (!appId) return;
-        const s = document.createElement("script");
-        s.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
-        s.defer = true; document.head.appendChild(s);
-        window.OneSignalDeferred.push(async (OneSignal) => {
-          try { await OneSignal.init({ appId, allowLocalhostAsSecureOrigin: true }); } catch (e) {}
-        });
-      }).catch(() => {});
-    }
-    return {
-      enable(user) {
-        start();
-        window.OneSignalDeferred.push(async (OneSignal) => {
-          try { await OneSignal.login("admin-" + user.id); await OneSignal.User.addTag("role", "admin"); await OneSignal.Notifications.requestPermission(); } catch (e) {}
-        });
-      },
-      disable() {
-        window.OneSignalDeferred.push(async (OneSignal) => {
-          try { await OneSignal.User.removeTag("role"); await OneSignal.logout(); } catch (e) {}
-        });
-      },
-    };
-  })();
+  // Push web désactivé côté web (repoussé aux apps mobiles). Les alertes admin
+  // (commandes / stock / avis) sont enregistrées en base via les triggers et la
+  // fonction notifier() ; un futur inbox admin ou push mobile pourra les lire.
 
   /* ===================== Authentification ===================== */
   function showLogin(msg) {
@@ -355,7 +327,6 @@
     $("#who").textContent = user.email;
     await loadCategories();
     await loadProducts();
-    adminPush.enable(user); // reçoit les alertes commandes/stock/avis
     // L'onglet « Accès » n'apparaît que pour le propriétaire.
     try {
       const { data: owner } = await sb.rpc("is_owner");
@@ -817,19 +788,12 @@
     const title = ($("#promo-title").value || "").trim() || "portable.sn";
     const message = ($("#promo-msg").value || "").trim();
     if (!message) return toast("Écris un message.");
-    if (!confirm("Envoyer cette notification à tous les clients abonnés ?")) return;
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      const res = await fetch(SUPABASE_URL + "/functions/v1/notify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": "Bearer " + (session ? session.access_token : "") },
-        body: JSON.stringify({ type: "promo", title: title, message: message }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!j.ok) return toast(j.error || "Envoi impossible.");
-      $("#promo-msg").value = "";
-      toast("Promo envoyée ✓");
-    } catch (e) { toast("Envoi impossible."); }
+    if (!confirm("Envoyer cette notification à tous les clients ?")) return;
+    // Diffusion interne : crée une notification en base pour chaque client.
+    const { data, error } = await sb.rpc("diffuser_promo", { p_title: title, p_message: message });
+    if (error) return toast(friendlyErr ? friendlyErr(error) : error.message);
+    $("#promo-msg").value = "";
+    toast("Promo envoyée à " + (Number(data) || 0) + " client(s) ✓");
   }
 
   async function loadOrders() {
@@ -944,7 +908,7 @@
     const t = e.target.closest("[data-action]");
     if (!t) return;
     const a = t.dataset.action, id = t.dataset.id;
-    if (a === "logout") { adminPush.disable(); sb.auth.signOut().then(() => showLogin()); }
+    if (a === "logout") { sb.auth.signOut().then(() => showLogin()); }
     else if (a === "open-order") openOrder(id);
     else if (a === "apply-status") applyStatus(id);
     else if (a === "new-product") openEditor(null);

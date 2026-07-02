@@ -184,6 +184,18 @@
   .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
   .empty svg { width: 64px; height: 64px; opacity: .35; margin-bottom: 14px; }
   .empty p { font-size: 15px; }
+  /* Centre de notifications */
+  #notif-list { display: flex; flex-direction: column; gap: 8px; padding: 2px 2px 20px; }
+  .notif-item { display: flex; gap: 12px; align-items: flex-start; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 12px 12px 14px; position: relative; }
+  .notif-item.unread { border-color: var(--green); background: color-mix(in srgb, var(--green) 6%, var(--card)); }
+  .notif-item.unread::before { content: ""; position: absolute; left: 5px; top: 16px; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .notif-ic { font-size: 20px; line-height: 1.2; flex: 0 0 auto; }
+  .notif-main { flex: 1 1 auto; min-width: 0; }
+  .notif-title { font-weight: 700; font-size: 14px; color: var(--ink); }
+  .notif-msg { font-size: 13px; color: var(--ink); opacity: .85; margin-top: 2px; word-wrap: break-word; }
+  .notif-time { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .notif-del { flex: 0 0 auto; background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 8px; }
+  .notif-del:hover { background: var(--bg); color: var(--ink); }
 
   /* ---------- Panier ---------- */
   .cart-item {
@@ -454,15 +466,10 @@
   <!-- Vue Mes commandes (remplie dynamiquement) -->
   <section class="view" id="view-mescommandes"></section>
 
-  <!-- Vue Notifications (placeholder — sera connectée à OneSignal) -->
+  <!-- Vue Notifications — boîte de réception interne (alertes enregistrées en base) -->
   <section class="view" id="view-notifications">
     <h2 class="view-title">Notifications</h2>
-    <div class="empty">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-      <p>Active les notifications pour suivre le statut de tes commandes et recevoir les promos.</p>
-      <button class="order-btn" id="notif-enable" style="max-width:280px;margin:4px auto 0">Activer les notifications</button>
-      <p id="notif-state" class="hint" style="margin-top:10px"></p>
-    </div>
+    <div id="notif-list"></div>
   </section>
 </main>
 
@@ -993,7 +1000,7 @@
     }
   }
   function logoutProfile() {
-    if (window.psnPush) window.psnPush.logout();
+    if (window.psnNotif) window.psnNotif.clear();
     PROFILE = null;
     localStorage.removeItem("psn_profile");
     editingProfile = false;
@@ -1155,7 +1162,7 @@
       token: acc.token || (PROFILE && PROFILE.token) || null, // jeton de session client
     };
     localStorage.setItem("psn_profile", JSON.stringify(PROFILE));
-    if (window.psnPush) window.psnPush.login(PROFILE.phone); // lie les notifications au numéro
+    if (window.psnNotif) window.psnNotif.refreshBadge(); // met à jour le compteur d'alertes
   }
 
   async function doLogin() {
@@ -1223,6 +1230,7 @@
     if (view === "favoris") renderFavs();
     if (view === "compte") renderProfile();
     if (view === "mescommandes") { store.prevView = "compte"; loadMyOrders(); }
+    if (view === "notifications") psnNotif.open();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function isView(name) { const el = $("#view-" + name); return el && el.classList.contains("active"); }
@@ -1374,9 +1382,10 @@
       "[data-add],[data-fav],[data-inc],[data-dec],[data-del],[data-go],[data-cat]," +
       "[data-open],[data-back],[data-vcolor],[data-vstorage],[data-vmodel],[data-thumb]," +
       "[data-checkout],[data-pay],[data-order],[data-profil-save],[data-profil-edit],[data-profil-logout]," +
-      "[data-auth-login],[data-auth-signup],[data-auth-switch],[data-mo],[data-mo-back],[data-account-login],#submit-order");
+      "[data-auth-login],[data-auth-signup],[data-auth-switch],[data-mo],[data-mo-back],[data-account-login],[data-notif-del],#submit-order");
     if (!t) return;
-    if (t.hasAttribute("data-account-login")) goToAccountLogin();
+    if (t.dataset.notifDel) psnNotif.del(t.dataset.notifDel);
+    else if (t.hasAttribute("data-account-login")) goToAccountLogin();
     else if (t.dataset.mo) openMyOrder(t.dataset.mo);
     else if (t.hasAttribute("data-mo-back")) { myOrderView = "list"; renderMyOrders(); }
     else if (t.hasAttribute("data-profil-save")) saveProfile();
@@ -1510,59 +1519,101 @@
     logo.addEventListener("pointercancel", cancelHold);
   })();
 
-  // Notifications push OneSignal (client). L'App ID est lu au runtime via l'Edge
-  // Function onesignal-config : aucune valeur OneSignal n'est écrite dans ce fichier.
-  (function setupPush() {
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    const nrm = (p) => String(p == null ? "" : p).replace(/\D/g, "").slice(-9);
-    let enabled = false;
-    let pushError = null;
-    function login(phone) {
-      const id = nrm(phone); if (!id) return;
-      window.OneSignalDeferred.push(async (OneSignal) => { try { await OneSignal.login(id); } catch (e) {} });
+  // Centre de notifications interne (web) — lit les alertes enregistrées en base.
+  // Aucune dépendance push web : l'app mobile pourra plus tard ajouter un push
+  // par-dessus, sans changer cette logique. Accès par jeton de session client.
+  const psnNotif = (function () {
+    let items = [];
+    const tok = () => (PROFILE && PROFILE.token) ? PROFILE.token : null;
+
+    const ICONS = {
+      order_new: "🛒", order_status: "📦", low_stock: "📉",
+      review: "⭐", promo: "🎁", message: "💬", info: "🔔",
+    };
+    function timeAgo(iso) {
+      const d = new Date(iso), s = Math.floor((Date.now() - d.getTime()) / 1000);
+      if (s < 60) return "à l'instant";
+      if (s < 3600) return "il y a " + Math.floor(s / 60) + " min";
+      if (s < 86400) return "il y a " + Math.floor(s / 3600) + " h";
+      if (s < 604800) return "il y a " + Math.floor(s / 86400) + " j";
+      return d.toLocaleDateString("fr-FR");
     }
-    function logout() {
-      window.OneSignalDeferred.push(async (OneSignal) => { try { await OneSignal.logout(); } catch (e) {} });
+
+    async function refreshBadge() {
+      const b = $("#notif-badge"); if (!b) return;
+      const t = tok();
+      if (!t) { b.textContent = ""; b.dataset.count = 0; return; }
+      try {
+        const { data } = await sb.rpc("notifications_non_lues", { p_token: t });
+        const n = Number(data) || 0;
+        b.textContent = n ? (n > 99 ? "99+" : String(n)) : "";
+        b.dataset.count = n;
+      } catch (e) {}
     }
-    function prompt() {
-      const st = $("#notif-state");
-      if (!enabled) {
-        if (st) st.textContent = pushError
-          ? "Notifications pas encore activées côté serveur. Réessaie bientôt."
-          : "Chargement… réessaie dans un instant.";
+
+    function render() {
+      const list = $("#notif-list"); if (!list) return;
+      if (!tok()) {
+        list.innerHTML = '<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>'
+          + '<p>Connecte-toi pour voir tes notifications.</p>'
+          + '<button class="order-btn" data-go="compte" style="max-width:220px;margin:4px auto 0">Se connecter</button></div>';
         return;
       }
-      window.OneSignalDeferred.push(async (OneSignal) => {
-        try { await OneSignal.Notifications.requestPermission(); if (st) st.textContent = "Merci ! Tu recevras les notifications importantes."; }
-        catch (e) { if (st) st.textContent = "Activation refusée ou impossible."; }
-      });
+      if (!items.length) {
+        list.innerHTML = '<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><p>Aucune notification pour le moment.</p></div>';
+        return;
+      }
+      list.innerHTML = items.map((n) => `
+        <div class="notif-item ${n.is_read ? "" : "unread"}">
+          <div class="notif-ic">${ICONS[n.type] || ICONS.info}</div>
+          <div class="notif-main">
+            <div class="notif-title">${esc(n.title)}</div>
+            <div class="notif-msg">${esc(n.message)}</div>
+            <div class="notif-time">${esc(timeAgo(n.created_at))}</div>
+          </div>
+          <button class="notif-del" data-notif-del="${n.id}" aria-label="Supprimer">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>`).join("");
     }
-    window.psnPush = { login, logout, prompt };
-    const btn = $("#notif-enable"); if (btn) btn.addEventListener("click", prompt);
 
-    // Récupère l'App ID puis charge le SDK et initialise.
-    fetch(SUPABASE_URL + "/functions/v1/onesignal-config")
-      .then((r) => r.json())
-      .then(({ appId }) => {
-        if (!appId) return; // OneSignal pas encore configuré (secrets non posés)
-        const s = document.createElement("script");
-        s.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
-        s.defer = true; document.head.appendChild(s);
-        window.OneSignalDeferred.push(async (OneSignal) => {
-          try {
-            await OneSignal.init({ appId, allowLocalhostAsSecureOrigin: true });
-            enabled = true;
-            if (PROFILE && PROFILE.phone) login(PROFILE.phone); // relie la session en cours
-          } catch (e) {
-            // Ex. « App not configured for web push » = plateforme Web non configurée
-            // dans le tableau de bord OneSignal. On journalise pour diagnostic.
-            console.error("OneSignal init:", (e && e.message) ? e.message : e);
-            pushError = (e && e.message) ? e.message : String(e);
-          }
-        });
-      })
-      .catch(() => {});
+    async function open() {
+      const list = $("#notif-list");
+      const t = tok();
+      if (!t) { render(); return; }
+      if (list) list.innerHTML = '<p class="hint" style="text-align:center;padding:24px">Chargement…</p>';
+      try {
+        const { data, error } = await sb.rpc("mes_notifications", { p_token: t });
+        if (error) throw error;
+        items = data || [];
+        render();
+        if (items.some((n) => !n.is_read)) {
+          await sb.rpc("notifications_marquer_lues", { p_token: t });
+          items = items.map((n) => Object.assign({}, n, { is_read: true }));
+        }
+        refreshBadge();
+      } catch (e) {
+        if (list) list.innerHTML = '<p class="hint" style="text-align:center;padding:24px">Impossible de charger les notifications.</p>';
+      }
+    }
+
+    async function del(id) {
+      const t = tok(); if (!t) return;
+      items = items.filter((n) => String(n.id) !== String(id));
+      render();
+      try { await sb.rpc("notification_supprimer", { p_token: t, p_id: Number(id) }); } catch (e) {}
+      refreshBadge();
+    }
+
+    function clear() {
+      items = [];
+      const b = $("#notif-badge"); if (b) { b.textContent = ""; b.dataset.count = 0; }
+      render();
+    }
+
+    return { open, refreshBadge, del, clear };
   })();
+  window.psnNotif = psnNotif;
 
   // Changements de sélecteurs (zone de livraison, région/quartier du profil)
   document.addEventListener("change", (e) => {
@@ -1665,6 +1716,8 @@
   async function init() {
     applySettings(); // liens WhatsApp par défaut immédiats
     applyProfileUI(); // reconnaissance du client si profil déjà enregistré
+    psnNotif.refreshBadge(); // compteur d'alertes non lues si déjà connecté
+    setInterval(() => psnNotif.refreshBadge(), 60000); // rafraîchit le badge périodiquement
     $("#grid").innerHTML =
       '<p style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 0">Chargement du catalogue…</p>';
     try {
