@@ -42,7 +42,9 @@ Deno.serve(async (req: Request) => {
       headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Basic ${restKey}` },
       body: JSON.stringify({ app_id: appId, ...payload }),
     });
-    return { status: res.status, data: await res.json().catch(() => ({})) };
+    const data = await res.json().catch(() => ({}));
+    console.log('osSend', res.status, JSON.stringify(data));
+    return { status: res.status, data };
   }
   const toAdmins = (heading: string, content: string, url = SITE_URL + '/admin.html') =>
     osSend({ filters: ADMIN_FILTER, headings: { en: heading, fr: heading }, contents: { en: content, fr: content }, url });
@@ -50,6 +52,13 @@ Deno.serve(async (req: Request) => {
     osSend({ include_external_user_ids: [norm(phone)], headings: { en: heading, fr: heading }, contents: { en: content, fr: content }, url: SITE_URL });
 
   try {
+    if (type === 'selftest') {
+      // Valide la clé REST sans spammer : cible un utilisateur externe inexistant.
+      const r = await osSend({ include_external_user_ids: ['__selftest_nobody__'], headings: { en: 'selftest', fr: 'selftest' }, contents: { en: 'selftest', fr: 'selftest' } });
+      const ok = r.status >= 200 && r.status < 300;
+      return json({ ok, status: r.status, key_valid: r.status !== 401 && r.status !== 403, onesignal: r.data }, 200);
+    }
+
     if (type === 'new_order') {
       const { data: o } = await db.from('orders')
         .select('reference,customer_name,customer_phone,total').eq('id', body.order_id).maybeSingle();
