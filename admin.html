@@ -200,7 +200,7 @@
     <h1>portable<span class="dot">.sn</span></h1>
     <p>Espace d'administration</p>
     <div class="msg err" id="login-msg"></div>
-    <div class="field"><label>Email</label><input id="login-email" type="email" autocomplete="username" required /></div>
+    <div class="field"><label>Numéro</label><input id="login-phone" type="tel" inputmode="numeric" autocomplete="username" placeholder="77 000 00 00" required /></div>
     <div class="field"><label>Mot de passe</label><input id="login-pass" type="password" autocomplete="current-password" required /></div>
     <button class="btn btn-primary" id="login-btn" type="submit">Se connecter</button>
   </form>
@@ -321,10 +321,14 @@
     $("#login").style.display = "grid";
     if (msg) { const m = $("#login-msg"); m.textContent = msg; m.classList.add("show"); }
   }
-  async function showApp(user) {
+  function storedPhone() {
+    try { const p = JSON.parse(localStorage.getItem("psn_profile") || "null");
+      return p && p.phone ? String(p.phone).replace(/\D/g, "").slice(-9) : ""; } catch (_) { return ""; }
+  }
+  async function showApp(user, phone) {
     $("#login").style.display = "none";
     $("#app").style.display = "block";
-    $("#who").textContent = user.email;
+    $("#who").textContent = phone || storedPhone() || (user && user.email) || "";
     await loadCategories();
     await loadProducts();
     // L'onglet « Accès » n'apparaît que pour le propriétaire.
@@ -343,20 +347,41 @@
     showApp(session.user);
   }
 
+  // Pré-remplit le numéro depuis la session boutique (même origine que index.html).
+  (function prefillPhone() { const el = $("#login-phone"); if (el) el.value = storedPhone(); })();
+
+  // Connexion par numéro + mot de passe (même logique que le geste de la boutique).
+  // Propriétaire : mot de passe de son compte Supabase. Assistant : mot de passe
+  // boutique -> pont serveur (assistant-login) -> session. Aucun email à saisir.
   $("#login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const btn = $("#login-btn"); btn.disabled = true; btn.textContent = "Connexion…";
-    $("#login-msg").classList.remove("show");
-    const email = $("#login-email").value.trim();
+    const btn = $("#login-btn"), m = $("#login-msg");
+    const phone = ($("#login-phone").value || "").replace(/\D/g, "").slice(-9);
     const password = $("#login-pass").value;
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) { btn.disabled = false; btn.textContent = "Se connecter";
-      const m = $("#login-msg"); m.textContent = "Identifiants invalides."; m.classList.add("show"); return; }
-    const { data: isAdmin } = await sb.rpc("is_admin");
-    if (!isAdmin) { await sb.auth.signOut(); btn.disabled = false; btn.textContent = "Se connecter";
-      const m = $("#login-msg"); m.textContent = "Ce compte n'est pas administrateur."; m.classList.add("show"); return; }
-    btn.disabled = false; btn.textContent = "Se connecter";
-    showApp(data.user);
+    const fail = (t) => { btn.disabled = false; btn.textContent = "Se connecter"; m.textContent = t; m.classList.add("show"); };
+    if (phone.length !== 9) return fail("Numéro invalide (9 chiffres).");
+    if (!password) return fail("Mot de passe requis.");
+    btn.disabled = true; btn.textContent = "Connexion…"; m.classList.remove("show");
+    try {
+      const { data: kind, error: e0 } = await sb.rpc("admin_account_kind", { p_phone: phone });
+      if (e0) return fail("Connexion impossible. Réessaie.");
+      if (!kind) return fail("Ce numéro n'a pas accès à l'espace admin.");
+      if (kind.kind === "owner") {
+        const { error } = await sb.auth.signInWithPassword({ email: kind.email, password });
+        if (error) return fail("Mot de passe incorrect.");
+      } else {
+        const { data: br, error: be } = await sb.functions.invoke("assistant-login", { body: { phone, pin: password } });
+        if (be || !br) return fail("Connexion impossible. Réessaie.");
+        if (!br.ok) return fail(br.error || "Accès refusé.");
+        const { error: ve } = await sb.auth.verifyOtp({ token_hash: br.token_hash, type: "magiclink" });
+        if (ve) return fail("Connexion impossible. Réessaie.");
+      }
+      const { data: isAdmin } = await sb.rpc("is_admin");
+      if (!isAdmin) { await sb.auth.signOut(); return fail("Accès refusé."); }
+      const { data: { session } } = await sb.auth.getSession();
+      btn.disabled = false; btn.textContent = "Se connecter";
+      showApp(session ? session.user : null, phone);
+    } catch (_) { fail("Connexion impossible. Réessaie."); }
   });
 
   /* ===================== Chargement des données ===================== */
