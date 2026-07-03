@@ -1543,11 +1543,7 @@
         `</div></div>`;
     }
 
-    const stockHtml = out
-      ? `<div class="stock out"><span class="ic-dot"></span> Rupture de stock</div>`
-      : (v.stock <= 5
-          ? `<div class="stock"><span class="ic-dot"></span> ${v.stock} en stock</div>`
-          : `<div class="stock" style="color:var(--green)"><span class="ic-dot"></span> En stock</div>`);
+    const stockHtml = ""; // stock supprimé : aucune indication de disponibilité
     let badge = "";
     if (discount > 0) badge = `<span class="tag promo">-${discount}%</span>`;
     else if (p.tag === "hot") badge = `<span class="tag hot">HOT</span>`;
@@ -1875,7 +1871,6 @@
       let h = `<div class="dk-fgroup"><h4>Catégories</h4>${cats.map((c) => opt("cat", F.cats, c, cCount(c))).join("")}</div>`;
       if (brands.length) h += `<div class="dk-fgroup"><h4>Marques</h4>${brands.map((b) => opt("brand", F.brands, b, bCount(b))).join("")}</div>`;
       h += `<div class="dk-fgroup"><h4>Prix maximum</h4><input type="range" id="dk-price" min="0" max="${priceCeil}" step="5000" value="${F.priceMax}"><div class="dk-price-val" id="dk-price-val">Jusqu'à ${money(F.priceMax)}</div></div>`;
-      h += `<div class="dk-fgroup"><h4>Disponibilité</h4><label class="dk-fopt"><input type="checkbox" data-dkf="stock" ${F.inStock ? "checked" : ""}><span>En stock uniquement</span></label></div>`;
       if (conds.length) h += `<div class="dk-fgroup"><h4>État</h4>${conds.map((c) => opt("cond", F.conds, c)).join("")}</div>`;
       h += `<button class="dk-reset" id="dk-reset">Réinitialiser les filtres</button>`;
       $d("dk-sidebar").innerHTML = h;
@@ -1998,7 +1993,6 @@
       if (p.condition) rows.push(["État", p.condition]);
       if (storages.length) rows.push(["Stockage", storages.join(" / ")]);
       if (colors.length) rows.push(["Couleurs", colors.join(", ")]);
-      rows.push(["Disponibilité", p.stock > 0 ? (p.stock <= 5 ? `Bientôt épuisé (${p.stock})` : "En stock") : "Rupture"]);
       if (p.ratingCount > 0) rows.push(["Note", `★ ${Number(p.rating).toFixed(1)} (${p.ratingCount})`]);
       rows.push(["Livraison", "Paiement à la livraison"]);
       return rows.map(([k, v]) => `<div class="dk-pp-spec"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("");
@@ -2095,7 +2089,6 @@
         ["Marque", (p) => p.brand || "—"],
         ["État", (p) => p.condition || "—"],
         ["Stockage", (p) => uniq((p.variants || []).map((v) => v.storage)).join(" / ") || "—"],
-        ["Disponibilité", (p) => p.stock > 0 ? "✔" : "✕"],
         ["Note", (p) => p.ratingCount > 0 ? "★ " + Number(p.rating).toFixed(1) : "—"],
       ];
       const head = `<tr><th class="feat"></th>${items.map((p) => `<th>${p.image ? `<img src="${p.image}" alt="">` : ""}<div class="nm">${esc(p.name)}</div><button class="dk-mini-x" data-dkcmprm="${p.id}">retirer</button></th>`).join("")}</tr>`;
@@ -2230,7 +2223,7 @@
       .map((v) => ({
         id: v.id, label: v.label, color: v.color, storage: v.storage,
         attributes: v.attributes || {}, price: v.price,
-        oldPrice: v.old_price || null, stock: v.stock_actuel ?? 0,
+        oldPrice: v.old_price || null, stock: 999999, // stock illimité : commande libre
       }))
       .sort((a, b) => a.price - b.price);
     const images = (p.images || []).slice()
@@ -2247,7 +2240,7 @@
       condition: p.condition || null,
       price: p.prix_base ?? def.price ?? 0,
       oldPrice: def.oldPrice || null,
-      stock: p.stock_total ?? def.stock ?? 0,
+      stock: 999999, // stock illimité : commande libre
       tag: p.is_hot ? "hot" : null,
       category: p.category ? p.category.name : null,
       image: cover,
