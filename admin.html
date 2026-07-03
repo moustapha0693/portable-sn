@@ -190,6 +190,35 @@
     background:var(--ink); color:#fff; padding:12px 18px; border-radius:12px; font-size:14px; font-weight:600;
     opacity:0; pointer-events:none; transition:all .25s; max-width:90%; }
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ----- Tableau de bord ----- */
+  .dash-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:18px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:15px 17px; border-left:4px solid var(--line); }
+  .kpi .k-label { font-size:11px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.4px; }
+  .kpi .k-val { font-size:25px; font-weight:800; margin-top:5px; line-height:1.1; }
+  .kpi .k-sub { font-size:12px; color:var(--muted); margin-top:3px; }
+  .kpi.a-blue { border-left-color:var(--blue); } .kpi.a-green { border-left-color:var(--green); }
+  .kpi.a-orange { border-left-color:var(--orange); } .kpi.a-red { border-left-color:var(--red); }
+  .kpi.clk { cursor:pointer; transition:box-shadow .15s, transform .12s; }
+  .kpi.clk:hover { box-shadow:0 8px 20px rgba(0,0,0,.08); transform:translateY(-2px); }
+  .dash-grid { display:grid; grid-template-columns:1.7fr 1fr; gap:16px; align-items:start; }
+  @media (max-width:860px){ .dash-grid { grid-template-columns:1fr; } }
+  .dcard { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-bottom:16px; }
+  .dcard h3 { font-size:14px; font-weight:800; margin-bottom:12px; }
+  .chart { width:100%; height:190px; display:block; }
+  .chart .bar { fill:var(--blue); transition:fill .15s; }
+  .chart .bar:hover { fill:#1d4ed8; }
+  .chart-x { font-size:9px; fill:var(--muted); }
+  .sbar-row { display:flex; align-items:center; gap:10px; margin-bottom:9px; font-size:13px; }
+  .sbar-track { flex:1; height:9px; background:var(--bg); border-radius:6px; overflow:hidden; }
+  .sbar-fill { height:100%; border-radius:6px; }
+  .dlist-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); font-size:13px; }
+  .dlist-row:last-child { border-bottom:none; }
+  .dlist-row .grow { flex:1; min-width:0; }
+  .dlist-row .nm { font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dlist-row .sub { color:var(--muted); font-size:12px; }
+  .stock-pill { font-size:12px; font-weight:800; padding:2px 9px; border-radius:999px; white-space:nowrap; }
+  .stock-pill.zero { background:#fee2e2; color:#991b1b; } .stock-pill.low { background:#fef9c3; color:#854d0e; }
 </style>
 </head>
 <body>
@@ -214,12 +243,21 @@
   </div>
   <div class="wrap">
     <div class="tabs">
-      <button class="tab active" data-tab="produits">Produits</button>
+      <button class="tab active" data-tab="dashboard">Tableau de bord</button>
+      <button class="tab" data-tab="produits">Produits</button>
       <button class="tab" data-tab="commandes">Commandes</button>
       <button class="tab" data-tab="acces" id="tab-btn-acces" hidden>Accès</button>
     </div>
 
-    <section id="tab-produits">
+    <section id="tab-dashboard">
+      <div class="head-row">
+        <h2>Tableau de bord</h2>
+        <button class="btn btn-line btn-sm" data-action="refresh-dash">↻ Actualiser</button>
+      </div>
+      <div id="dash"><div class="hint" style="padding:20px">Chargement…</div></div>
+    </section>
+
+    <section id="tab-produits" hidden>
       <div class="head-row">
         <h2>Produits</h2>
         <input class="search-admin" id="psearch" type="search" placeholder="Rechercher un produit…" />
@@ -337,6 +375,7 @@
       state.isOwner = !!owner;
       $("#tab-btn-acces").hidden = !state.isOwner;
     } catch (_) { state.isOwner = false; }
+    switchTab("dashboard"); // le tableau de bord est la vue par défaut
   }
 
   async function ensureAdminAndStart() {
@@ -757,12 +796,98 @@
   function switchTab(name) {
     if (name === "acces" && !state.isOwner) return; // sécurité UI
     state.tab = name;
+    $("#tab-dashboard").hidden = name !== "dashboard";
     $("#tab-produits").hidden = name !== "produits";
     $("#tab-commandes").hidden = name !== "commandes";
     $("#tab-acces").hidden = name !== "acces";
     $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+    if (name === "dashboard") loadDashboard();
     if (name === "commandes") loadOrders();
     if (name === "acces") loadMembers();
+  }
+
+  /* ===================== Tableau de bord ===================== */
+  const fcfa = (n) => Number(n || 0).toLocaleString("fr-FR") + " FCFA";
+  function timeShort(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  }
+  const STATUS_ORDER = ["en_attente", "confirmee", "en_livraison", "livree", "annulee"];
+  const STATUS_COLOR = { en_attente: "#f59e0b", confirmee: "#3b82f6", en_livraison: "#6366f1", livree: "#16a34a", annulee: "#ef4444" };
+
+  async function loadDashboard() {
+    const box = $("#dash");
+    box.innerHTML = '<div class="hint" style="padding:20px">Chargement…</div>';
+    const { data, error } = await sb.rpc("admin_dashboard");
+    if (error) { box.innerHTML = '<div class="hint" style="padding:20px">Erreur : ' + esc(error.message) + '</div>'; return; }
+    renderDashboard(data || {});
+  }
+
+  function salesChart(data) {
+    if (!data.length) return '<div class="hint">Pas encore de données.</div>';
+    const W = 580, H = 190, pad = 26, bw = (W - pad * 2) / data.length;
+    const max = Math.max(1, ...data.map((x) => Number(x.revenue) || 0));
+    const parts = data.map((x, i) => {
+      const v = Number(x.revenue) || 0;
+      const h = Math.round((v / max) * (H - 42));
+      const bx = pad + i * bw + bw * 0.16, by = H - 22 - h, wid = bw * 0.68;
+      const lbl = new Date(x.d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+      let s = `<rect class="bar" x="${bx.toFixed(1)}" y="${by}" width="${wid.toFixed(1)}" height="${Math.max(h, 2)}" rx="3"><title>${lbl} — ${fcfa(v)} (${x.orders} cmd)</title></rect>`;
+      if (i % 2 === 0) s += `<text class="chart-x" x="${(pad + i * bw + bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${lbl}</text>`;
+      return s;
+    }).join("");
+    return `<svg class="chart" viewBox="0 0 ${W} ${H}">${parts}</svg>`;
+  }
+
+  function statusBars(byStatus, total) {
+    const rows = STATUS_ORDER.filter((s) => byStatus[s]).map((s) => {
+      const c = byStatus[s], pct = total ? Math.round(c / total * 100) : 0;
+      return `<div class="sbar-row"><span style="width:96px">${statusLabel(s)}</span><div class="sbar-track"><div class="sbar-fill" style="width:${pct}%;background:${STATUS_COLOR[s]}"></div></div><b>${c}</b></div>`;
+    }).join("");
+    return rows || '<div class="hint">Aucune commande.</div>';
+  }
+
+  function renderDashboard(d) {
+    const kpis = [
+      { label: "Chiffre d'affaires", val: fcfa(d.revenue_total), sub: "Ce mois : " + fcfa(d.revenue_month), cls: "a-green" },
+      { label: "Commandes", val: d.orders_total ?? 0, sub: "Aujourd'hui : " + (d.orders_today ?? 0), cls: "a-blue", tab: "commandes" },
+      { label: "En attente", val: d.orders_pending ?? 0, sub: "à traiter", cls: "a-orange", tab: "commandes" },
+      { label: "Stock bas", val: d.low_stock ?? 0, sub: "≤ 3 unités", cls: "a-red", tab: "produits" },
+      { label: "Clients", val: d.clients ?? 0, sub: "comptes boutique", cls: "a-blue" },
+      { label: "Produits actifs", val: d.products_active ?? 0, sub: "en ligne", cls: "a-blue", tab: "produits" },
+    ];
+    const kpiHtml = '<div class="dash-kpis">' + kpis.map((k) =>
+      `<div class="kpi ${k.cls} ${k.tab ? "clk" : ""}" ${k.tab ? `data-action="goto-tab" data-tab="${k.tab}"` : ""}><div class="k-label">${esc(k.label)}</div><div class="k-val">${k.val}</div><div class="k-sub">${esc(k.sub)}</div></div>`
+    ).join("") + "</div>";
+
+    const top = (d.top_products || []).map((p, i) =>
+      `<div class="dlist-row"><span style="color:var(--muted);font-weight:800;width:16px">${i + 1}</span><div class="grow"><div class="nm">${esc(p.name)}</div></div><div style="text-align:right"><div class="nm">${p.qty} vendus</div><div class="sub">${fcfa(p.revenue)}</div></div></div>`
+    ).join("") || '<div class="hint">Aucune vente enregistrée.</div>';
+
+    const low = (d.low_stock_list || []).map((v) =>
+      `<div class="dlist-row"><div class="grow"><div class="nm">${esc(v.name)}</div>${v.label && v.label !== "Standard" ? `<div class="sub">${esc(v.label)}</div>` : ""}</div><span class="stock-pill ${v.stock <= 0 ? "zero" : "low"}">${v.stock <= 0 ? "Rupture" : v.stock + " restant" + (v.stock > 1 ? "s" : "")}</span></div>`
+    ).join("") || '<div class="hint">Tout est bien approvisionné 👍</div>';
+
+    const recent = (d.recent_orders || []).map((o) =>
+      `<div class="dlist-row"><div class="grow"><div class="nm">${esc(o.reference)}</div><div class="sub">${esc(o.name)} · ${timeShort(o.created_at)}</div></div><div style="text-align:right"><div class="nm">${fcfa(o.total)}</div><span class="status-badge s-${o.status}">${statusLabel(o.status)}</span></div></div>`
+    ).join("") || '<div class="hint">Aucune commande.</div>';
+
+    const reviews = (d.reviews_pending > 0)
+      ? `<div class="dcard"><h3>⭐ Avis à modérer</h3><div class="dlist-row"><div class="grow nm">${d.reviews_pending} avis en attente d'approbation</div></div></div>` : "";
+
+    $("#dash").innerHTML = kpiHtml + `
+      <div class="dash-grid">
+        <div>
+          <div class="dcard"><h3>Ventes des 14 derniers jours</h3>${salesChart(d.sales_14d || [])}</div>
+          <div class="dcard"><h3>Dernières commandes</h3>${recent}</div>
+          <div class="dcard"><h3>Top produits</h3>${top}</div>
+        </div>
+        <div>
+          <div class="dcard"><h3>Répartition par statut</h3>${statusBars(d.by_status || {}, d.orders_total || 0)}</div>
+          <div class="dcard"><h3>⚠️ Stock à réapprovisionner</h3>${low}</div>
+          ${reviews}
+        </div>
+      </div>`;
   }
 
   /* ===================== Accès autorisés (propriétaire) ===================== */
@@ -928,6 +1053,7 @@
     if (!t) return;
     const a = t.dataset.action, id = t.dataset.id;
     if (a === "logout") { sb.auth.signOut().then(() => showLogin()); }
+    else if (a === "refresh-dash") loadDashboard();
     else if (a === "open-order") openOrder(id);
     else if (a === "apply-status") applyStatus(id);
     else if (a === "new-product") openEditor(null);
