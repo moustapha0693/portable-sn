@@ -387,92 +387,162 @@
   .timeline { display: flex; flex-direction: column; gap: 8px; }
   .tl-item { display: flex; align-items: center; gap: 10px; font-size: 13px; }
 
-  /* ================= INTERFACE DESKTOP (> 1024px) =================
-     N'affecte JAMAIS le mobile : tout est soit dans @media (min-width:1025px),
-     soit sur des éléments .d-only cachés par défaut. En dessous de 1025px, le
-     DOM et le CSS mobile restent strictement identiques. */
-  .d-only { display: none; }
+  /* ============ INTERFACE DESKTOP PREMIUM (> 1200px) ============
+     Layout 100% indépendant (#desktop-app). En dessous de 1201px il est masqué
+     et la version mobile reste STRICTEMENT identique (aucune règle ne l'affecte). */
+  #desktop-app { display: none; }
 
-  @media (min-width: 1025px) {
-    body { background: var(--bg); }
-    .container { max-width: 1500px; padding: 0 40px; }
+  @media (min-width: 1201px) {
+    body > header, body > main.container, nav.bottom, .fab { display: none !important; }
+    body { overflow: hidden; }
 
-    /* ---- Chrome mobile masqué, remplacé par le header fixe ---- */
-    nav.bottom { display: none; }
-    #grid { display: none; }
+    #desktop-app { display: grid; grid-template-rows: auto 1fr; height: 100vh; background: var(--bg); color: var(--ink); }
 
-    /* ---- Header : barre supérieure (logo | recherche large | actions) ---- */
-    header { position: sticky; top: 0; z-index: 50; }
-    header .container { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; padding: 16px 40px; }
-    .header-top { display: contents; }
-    .logo { order: 1; font-size: 26px; cursor: pointer; }
-    .search-wrap { order: 2; flex: 1 1 420px; max-width: 780px; padding: 0; }
-    .search input { height: 52px; border-radius: 14px; }
-    .search button { width: 60px; height: 52px; border-radius: 14px; cursor: pointer; }
-    .header-actions { order: 3; gap: 12px; margin-left: auto; }
-    .header-actions .d-only { display: grid; }
-    .icon-btn { width: 46px; height: 46px; border-radius: 14px; cursor: pointer; transition: background .15s, border-color .15s; }
-    .icon-btn:hover { background: #f1f5f9; border-color: #cbd5e1; }
-    .cats { order: 4; flex-basis: 100%; overflow: visible; flex-wrap: wrap; padding: 6px 0 2px; gap: 10px; }
-    .chip { cursor: pointer; padding: 9px 18px; transition: all .15s; }
-    .chip:hover { border-color: var(--ink); color: var(--ink); }
+    /* ---- Header fixe ---- */
+    #dk-header { display: flex; align-items: center; gap: 22px; padding: 0 28px; height: 68px;
+      background: var(--card); border-bottom: 1px solid var(--line); z-index: 20; }
+    .dk-logo { font-size: 24px; font-weight: 800; letter-spacing: -.5px; cursor: pointer; white-space: nowrap; }
+    .dk-logo .dot { color: var(--green); }
+    #dk-search { flex: 1 1 auto; max-width: 720px; display: flex; align-items: center; gap: 10px;
+      background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 0 14px; height: 46px; }
+    #dk-search input { flex: 1; border: none; background: none; outline: none; font-size: 15px; color: var(--ink); }
+    #dk-search svg { color: var(--muted); flex: 0 0 auto; }
+    .dk-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .dk-ic { position: relative; width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line);
+      background: var(--card); display: grid; place-items: center; color: var(--ink); cursor: pointer; transition: background .15s, border-color .15s; }
+    .dk-ic:hover { background: #f1f5f9; border-color: #cbd5e1; }
+    .dk-ic.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .dk-badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
+      background: var(--red); color: #fff; font-size: 11px; font-weight: 700; border-radius: 999px; display: grid; place-items: center; border: 2px solid var(--card); }
+    .dk-badge:empty, .dk-badge[data-count="0"] { display: none; }
+    .dk-avatar-sm { width: 30px; height: 30px; border-radius: 999px; background: var(--blue); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
 
-    /* ---- Vues : largeurs confortables ---- */
-    .view { padding: 22px 0 56px; }
-    #view-panier, #view-compte, #view-mescommandes, #view-notifications, #view-checkout, #view-produit { max-width: 960px; margin: 0 auto; }
-    .view-title { font-size: 24px; padding: 6px 2px 20px; }
+    /* ---- Corps : 3 colonnes ---- */
+    #dk-body { display: grid; grid-template-columns: 250px 1fr 384px; min-height: 0; }
 
-    /* ---- Bannière hero pleine largeur ---- */
-    #hero-d { display: block; margin: 10px 0 30px; }
-    .hero-inner { display: flex; align-items: center; justify-content: space-between; gap: 30px; position: relative; overflow: hidden;
-      background: linear-gradient(120deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%);
-      border-radius: 24px; padding: 46px 50px; color: #fff; }
-    .hero-kicker { font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; opacity: .8; }
-    .hero-title { font-size: 40px; line-height: 1.08; font-weight: 800; margin: 10px 0 10px; max-width: 620px; }
-    .hero-sub { font-size: 16px; opacity: .92; max-width: 560px; }
-    .hero-cta { margin-top: 24px; height: 50px; padding: 0 28px; border-radius: 12px; border: none; background: #fff; color: #0f172a;
-      font-size: 15px; font-weight: 800; cursor: pointer; transition: transform .15s, box-shadow .15s; }
-    .hero-cta:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(0,0,0,.28); }
-    .hero-art { flex: 0 0 auto; opacity: .92; }
-    .hero-art svg { width: 172px; height: 172px; }
+    /* ---- Sidebar filtres (fixe, scroll propre) ---- */
+    #dk-sidebar { border-right: 1px solid var(--line); background: var(--card); overflow-y: auto; padding: 20px 18px 40px; }
+    .dk-fgroup { margin-bottom: 22px; }
+    .dk-fgroup h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0 0 8px; }
+    .dk-fopt { display: flex; align-items: center; gap: 9px; padding: 6px 4px; font-size: 14px; cursor: pointer; border-radius: 8px; color: var(--ink); }
+    .dk-fopt:hover { background: var(--bg); }
+    .dk-fopt input { accent-color: var(--blue); width: 16px; height: 16px; flex: 0 0 auto; }
+    .dk-fopt .cnt { margin-left: auto; font-size: 12px; color: var(--muted); }
+    .dk-price-val { font-size: 13px; color: var(--ink); font-weight: 700; margin-top: 8px; }
+    #dk-price { width: 100%; accent-color: var(--blue); margin-top: 6px; }
+    .dk-reset { margin-top: 8px; width: 100%; height: 40px; border: 1px solid var(--line); background: var(--card); border-radius: 10px; font-weight: 700; color: var(--muted); cursor: pointer; }
+    .dk-reset:hover { color: var(--ink); border-color: var(--ink); }
 
-    /* ---- Grille produits desktop : 4 à 6 colonnes selon la largeur ---- */
-    #grid-desktop { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 26px; padding: 4px 0 20px; }
+    /* ---- Catalogue (seul à défiler) ---- */
+    #dk-catalog { overflow-y: auto; padding: 22px 24px 60px; }
+    .dk-cat-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
+    .dk-cat-title { font-size: 20px; font-weight: 800; }
+    .dk-cat-count { font-size: 13px; color: var(--muted); }
+    #dk-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
+    @media (min-width: 1800px) { #dk-grid { grid-template-columns: repeat(6, 1fr); } }
+    @media (min-width: 2300px) { #dk-grid { grid-template-columns: repeat(7, 1fr); } }
 
-    /* ---- Carte produit desktop (Material 3, hover, ombre, coins arrondis) ---- */
-    .card-d { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
-      display: flex; flex-direction: column; cursor: pointer; position: relative;
-      transition: transform .18s ease, box-shadow .22s ease, border-color .18s ease; }
-    .card-d:hover { transform: translateY(-5px); box-shadow: 0 18px 34px rgba(2,6,23,.13); border-color: transparent; }
-    .cd-media { position: relative; aspect-ratio: 1 / 1; background: linear-gradient(135deg,#f1f5f9,#e2e8f0); overflow: hidden; }
-    .cd-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .35s ease; }
-    .card-d:hover .cd-media img { transform: scale(1.06); }
-    .cd-media svg { position: absolute; inset: 0; margin: auto; width: 46%; height: 46%; opacity: .85; }
-    .cd-badge { position: absolute; top: 12px; left: 12px; z-index: 2; font-size: 12px; font-weight: 800; color: #fff;
-      padding: 5px 11px; border-radius: 9px; letter-spacing: .3px; }
-    .cd-badge.promo { background: var(--red); } .cd-badge.hot { background: var(--orange); } .cd-badge.out { background: var(--muted); }
-    .cd-out { opacity: .75; }
-    .cd-fav { position: absolute; top: 12px; right: 12px; z-index: 2; width: 40px; height: 40px; border-radius: 999px; border: none;
-      background: rgba(255,255,255,.94); display: grid; place-items: center; color: var(--muted);
-      box-shadow: 0 4px 10px rgba(0,0,0,.12); transition: transform .14s, color .15s; cursor: pointer; }
-    .cd-fav:hover { transform: scale(1.1); } .cd-fav.on { color: var(--red); }
-    .cd-body { padding: 16px 16px 18px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
-    .cd-seller { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
-    .cd-name { font-size: 15px; font-weight: 800; color: var(--ink); line-height: 1.3; min-height: 39px;
+    /* ---- Carte produit desktop ---- */
+    .dk-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; position: relative;
+      display: flex; flex-direction: column; cursor: pointer; transition: transform .16s ease, box-shadow .2s ease, border-color .16s; }
+    .dk-card:hover { transform: translateY(-4px); box-shadow: 0 16px 30px rgba(2,6,23,.12); border-color: transparent; }
+    .dk-card.sel { box-shadow: 0 0 0 2px var(--blue) inset; }
+    .dk-cmedia { position: relative; aspect-ratio: 1/1; background: linear-gradient(135deg,#f1f5f9,#e2e8f0); overflow: hidden; }
+    .dk-cmedia img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .3s ease; }
+    .dk-card:hover .dk-cmedia img { transform: scale(1.05); }
+    .dk-cmedia svg { position: absolute; inset: 0; margin: auto; width: 46%; height: 46%; opacity: .85; }
+    .dk-cbadge { position: absolute; top: 10px; left: 10px; z-index: 2; font-size: 11px; font-weight: 800; color: #fff; padding: 4px 9px; border-radius: 8px; }
+    .dk-cbadge.promo { background: var(--red); } .dk-cbadge.hot { background: var(--orange); } .dk-cbadge.out { background: var(--muted); }
+    .dk-cfav { position: absolute; top: 8px; right: 8px; z-index: 2; width: 34px; height: 34px; border-radius: 999px; border: none;
+      background: rgba(255,255,255,.94); display: grid; place-items: center; color: var(--muted); box-shadow: 0 3px 8px rgba(0,0,0,.12); cursor: pointer; transition: transform .12s, color .15s; }
+    .dk-cfav:hover { transform: scale(1.1); } .dk-cfav.on { color: var(--red); }
+    .dk-ccmp { position: absolute; bottom: 8px; right: 8px; z-index: 2; display: flex; align-items: center; gap: 5px; background: rgba(255,255,255,.94);
+      border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 700; color: var(--muted); box-shadow: 0 3px 8px rgba(0,0,0,.12); cursor: pointer; }
+    .dk-ccmp input { accent-color: var(--blue); margin: 0; }
+    .dk-cbody { padding: 12px 12px 14px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .dk-cseller { font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); }
+    .dk-cname { font-size: 14px; font-weight: 800; color: var(--ink); line-height: 1.25; min-height: 35px;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .cd-rating { font-size: 13px; color: #f59e0b; font-weight: 700; }
-    .cd-rating span { color: var(--muted); font-weight: 500; }
-    .cd-rating-empty { color: var(--muted); font-weight: 600; }
-    .cd-prices { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
-    .cd-price { font-size: 20px; font-weight: 800; color: var(--ink); }
-    .cd-old { font-size: 13px; color: var(--muted); text-decoration: line-through; }
-    .cd-add { margin-top: 12px; height: 46px; border-radius: 12px; border: none; background: var(--blue); color: #fff;
-      font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;
-      cursor: pointer; transition: filter .15s, transform .12s; }
-    .cd-add:hover { filter: brightness(1.08); } .cd-add:active { transform: scale(.98); }
-    .cd-add-off { background: #cbd5e1; cursor: not-allowed; }
+    .dk-crating { font-size: 12px; color: #f59e0b; font-weight: 700; }
+    .dk-crating span { color: var(--muted); font-weight: 500; }
+    .dk-cprices { display: flex; align-items: baseline; gap: 7px; margin-top: 2px; }
+    .dk-cprice { font-size: 17px; font-weight: 800; color: var(--ink); }
+    .dk-cold { font-size: 12px; color: var(--muted); text-decoration: line-through; }
+    .dk-cadd { margin-top: 10px; height: 40px; border: none; border-radius: 10px; background: var(--blue); color: #fff; font-size: 13px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer; transition: filter .15s; }
+    .dk-cadd:hover { filter: brightness(1.08); }
+    .dk-cadd-off { background: #cbd5e1; cursor: not-allowed; }
 
-    .fab { width: 60px; height: 60px; }
+    /* ---- Smart Panel (fixe, animé) ---- */
+    #dk-smart { border-left: 1px solid var(--line); background: var(--card); overflow: hidden; }
+    #dk-smart-scroll { height: 100%; overflow-y: auto; }
+    .dk-panel { padding: 22px 20px 44px; animation: dkPanelIn .3s cubic-bezier(.22,.61,.36,1); }
+    @keyframes dkPanelIn { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: translateX(0); } }
+    .dk-ptitle { font-size: 17px; font-weight: 800; margin: 0 0 14px; }
+    .dk-back { font-size: 13px; color: var(--blue); font-weight: 700; cursor: pointer; background: none; border: none; padding: 0; margin-bottom: 12px; display: inline-flex; align-items: center; gap: 4px; }
+
+    .dk-prof-head { text-align: center; padding: 6px 0 12px; }
+    .dk-prof-av { width: 74px; height: 74px; border-radius: 999px; background: var(--blue); color: #fff; display: grid; place-items: center; font-size: 30px; font-weight: 800; margin: 0 auto 10px; }
+    .dk-prof-name { font-size: 18px; font-weight: 800; }
+    .dk-prof-city { font-size: 13px; color: var(--muted); }
+    .dk-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+    .dk-stat { background: var(--bg); border-radius: 14px; padding: 14px; text-align: center; }
+    .dk-stat b { font-size: 22px; display: block; color: var(--ink); }
+    .dk-stat span { font-size: 12px; color: var(--muted); }
+    .dk-sec { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 18px 0 8px; }
+    .dk-mini { display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 12px; cursor: pointer; }
+    .dk-mini:hover { background: var(--bg); }
+    .dk-mini-img { width: 46px; height: 46px; border-radius: 10px; overflow: hidden; background: linear-gradient(135deg,#f1f5f9,#e2e8f0); flex: 0 0 auto; position: relative; }
+    .dk-mini-img img { width: 100%; height: 100%; object-fit: cover; }
+    .dk-mini-img svg { position:absolute; inset:0; margin:auto; width:55%; height:55%; opacity:.7; }
+    .dk-mini-info { min-width: 0; flex: 1; }
+    .dk-mini-name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+    .dk-mini-sub { font-size: 12px; color: var(--muted); }
+    .dk-mini-price { font-size: 13px; color: var(--ink); font-weight: 800; }
+    .dk-mini-x { background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px; }
+    .dk-mini-x:hover { color: var(--red); }
+    .dk-promo { background: linear-gradient(120deg,#1e3a8a,#2563eb); color: #fff; border-radius: 16px; padding: 16px; margin-top: 8px; }
+    .dk-promo b { font-size: 15px; } .dk-promo p { font-size: 13px; opacity: .9; margin: 4px 0 0; }
+
+    .dk-pp-main { position: relative; aspect-ratio: 1/1; border-radius: 16px; overflow: hidden; background: linear-gradient(135deg,#f1f5f9,#e2e8f0); }
+    .dk-pp-main img { width: 100%; height: 100%; object-fit: cover; }
+    .dk-pp-main svg { position:absolute; inset:0; margin:auto; width:46%; height:46%; opacity:.85; }
+    .dk-pp-thumbs { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .dk-pp-thumb { width: 54px; height: 54px; border-radius: 10px; overflow: hidden; border: 2px solid transparent; cursor: pointer; background: #eef2f7; }
+    .dk-pp-thumb.active { border-color: var(--blue); }
+    .dk-pp-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .dk-pp-seller { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 700; margin-top: 14px; }
+    .dk-pp-name { font-size: 20px; font-weight: 800; margin: 4px 0; }
+    .dk-pp-prices { display: flex; align-items: center; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
+    .dk-pp-price { font-size: 26px; font-weight: 800; }
+    .dk-pp-old { font-size: 15px; color: var(--muted); text-decoration: line-through; }
+    .dk-pp-pbadge { background: var(--red); color: #fff; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 8px; }
+    .dk-pp-desc { font-size: 14px; color: var(--ink); opacity: .85; line-height: 1.5; margin: 8px 0; }
+    .dk-pp-spec { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+    .dk-pp-spec span:first-child { color: var(--muted); }
+    .dk-pp-spec span:last-child { font-weight: 700; text-align: right; }
+    .dk-pp-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+    .dk-btn { height: 46px; border-radius: 12px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: filter .15s, transform .1s; }
+    .dk-btn:active { transform: scale(.99); } .dk-btn:hover { filter: brightness(1.06); }
+    .dk-btn-primary { background: var(--blue); color: #fff; }
+    .dk-btn-buy { background: var(--ink); color: #fff; }
+    .dk-btn-wa { background: #25d366; color: #fff; }
+    .dk-btn-ghost { background: var(--bg); color: var(--ink); border: 1px solid var(--line); }
+    .dk-btn[disabled] { background: #cbd5e1; color: #fff; cursor: not-allowed; }
+    .dk-two { display: flex; gap: 10px; } .dk-two .dk-btn { flex: 1; }
+
+    .dk-empty { text-align: center; color: var(--muted); padding: 40px 10px; font-size: 14px; }
+    .dk-empty svg { width: 54px; height: 54px; opacity: .35; margin-bottom: 10px; }
+    .dk-total { display: flex; justify-content: space-between; font-size: 17px; font-weight: 800; margin: 14px 2px; }
+
+    .dk-cmp-bar { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border-radius: 12px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; }
+    .dk-cmp-clear { background: none; border: none; color: var(--red); font-weight: 700; cursor: pointer; }
+    .dk-cmp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .dk-cmp-table th, .dk-cmp-table td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: center; vertical-align: top; }
+    .dk-cmp-table td.feat, .dk-cmp-table th.feat { text-align: left; color: var(--muted); font-weight: 600; white-space: nowrap; }
+    .dk-cmp-table thead img { width: 100%; max-width: 84px; border-radius: 8px; aspect-ratio: 1/1; object-fit: cover; margin: 0 auto 4px; display: block; }
+    .dk-cmp-table thead .nm { font-size: 12px; font-weight: 700; }
+    .dk-notif-unread { border-left: 3px solid var(--green); }
   }
 </style>
 </head>
@@ -486,14 +556,6 @@
         <button class="icon-btn" data-go="favoris" aria-label="Favoris">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/></svg>
           <span class="badge-count" id="fav-badge"></span>
-        </button>
-        <button class="icon-btn d-only" data-go="notifications" aria-label="Notifications">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-          <span class="badge-count" id="notif-badge-d"></span>
-        </button>
-        <button class="icon-btn d-only" data-go="panier" aria-label="Panier">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-          <span class="badge-count" id="cart-badge-d"></span>
         </button>
         <button class="icon-btn" id="account-btn" data-go="compte" aria-label="Profil">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -515,24 +577,7 @@
 <main class="container">
   <!-- Vue Accueil -->
   <section class="view active" id="view-accueil">
-    <!-- Bannière hero (desktop uniquement) -->
-    <div id="hero-d" class="d-only">
-      <div class="hero-inner">
-        <div class="hero-text">
-          <div class="hero-kicker">Bienvenue sur portable.sn</div>
-          <h1 class="hero-title">Ton téléphone, livré partout au Sénégal.</h1>
-          <p class="hero-sub">Smartphones, accessoires et électronique — paiement à la livraison, partout au pays.</p>
-          <button class="hero-cta" data-cat="Tous">Découvrir la boutique</button>
-        </div>
-        <div class="hero-art" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M11 5h2"/><path d="M12 18h.01"/></svg>
-        </div>
-      </div>
-    </div>
-    <!-- Grille mobile (inchangée) -->
     <div class="grid" id="grid"></div>
-    <!-- Grille desktop (variante dédiée, cachée sur mobile) -->
-    <div id="grid-desktop" class="d-only"></div>
     <div class="empty" id="grid-empty" hidden>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <p>Aucun produit ne correspond à ta recherche.</p>
@@ -615,6 +660,44 @@
     Profil
   </button>
 </nav>
+
+<!-- ================= INTERFACE DESKTOP PREMIUM (> 1200px) =================
+     Layout indépendant, rempli par le module psnDesktop. Masqué sur mobile. -->
+<div id="desktop-app" aria-hidden="true">
+  <header id="dk-header">
+    <div class="dk-logo" id="dk-logo"><span>portable</span><span class="dot">.sn</span></div>
+    <div id="dk-search">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="dk-search-input" type="search" placeholder="Rechercher un téléphone, une marque…" autocomplete="off" />
+    </div>
+    <div class="dk-actions">
+      <button class="dk-ic" data-dk="favoris" title="Favoris" aria-label="Favoris">
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/></svg>
+        <span class="dk-badge" id="dk-fav-badge"></span>
+      </button>
+      <button class="dk-ic" data-dk="notifications" title="Notifications" aria-label="Notifications">
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="dk-badge" id="dk-notif-badge"></span>
+      </button>
+      <button class="dk-ic" data-dk="cart" title="Panier" aria-label="Panier">
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+        <span class="dk-badge" id="dk-cart-badge"></span>
+      </button>
+      <button class="dk-ic" data-dk="profile" title="Profil" aria-label="Profil"><span class="dk-avatar-sm" id="dk-avatar">?</span></button>
+    </div>
+  </header>
+  <div id="dk-body">
+    <aside id="dk-sidebar"></aside>
+    <main id="dk-catalog">
+      <div class="dk-cat-head">
+        <div class="dk-cat-title" id="dk-cat-title">Catalogue</div>
+        <div class="dk-cat-count" id="dk-cat-count"></div>
+      </div>
+      <div id="dk-grid"></div>
+    </main>
+    <aside id="dk-smart"><div id="dk-smart-scroll"></div></aside>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -768,54 +851,13 @@
       </article>`;
   }
 
-  /* ===== Carte produit — VARIANTE DESKTOP (ne remplace pas cardHtml mobile) ===== */
-  function cardHtmlDesktop(p) {
-    const isFav = store.favs.includes(p.id);
-    const out = p.stock <= 0;
-    const discount = p.oldPrice ? Math.round((1 - p.price / p.oldPrice) * 100) : 0;
-    let badge = "";
-    if (out) badge = '<span class="cd-badge out">Épuisé</span>';
-    else if (discount > 0) badge = `<span class="cd-badge promo">-${discount}%</span>`;
-    else if (p.tag === "hot") badge = '<span class="cd-badge hot">HOT</span>';
-    const rating = p.ratingCount > 0
-      ? `<div class="cd-rating">★ ${Number(p.rating).toFixed(1)} <span>(${p.ratingCount})</span></div>`
-      : '<div class="cd-rating cd-rating-empty">Nouveau</div>';
-    const canBuy = !out && p.defaultVariantId;
-    const addBtn = canBuy
-      ? `<button class="cd-add" data-add="${p.defaultVariantId}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg> Ajouter au panier</button>`
-      : '<button class="cd-add cd-add-off" disabled>Indisponible</button>';
-    return `
-      <article class="card-d ${out ? "cd-out" : ""}" data-open="${p.id}">
-        <div class="cd-media">
-          ${badge}
-          <button class="cd-fav ${isFav ? "on" : ""}" data-fav="${p.id}" aria-label="Favori">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="${isFav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/></svg>
-          </button>
-          ${mediaHtml(p)}
-        </div>
-        <div class="cd-body">
-          <div class="cd-seller">${esc(p.brand || "portable.sn")}</div>
-          <div class="cd-name">${esc(p.name)}</div>
-          ${rating}
-          <div class="cd-prices"><span class="cd-price">${fmt(p.price)}</span>${p.oldPrice ? `<span class="cd-old">${fmt(p.oldPrice)}</span>` : ""}</div>
-          ${addBtn}
-        </div>
-      </article>`;
-  }
-
-  function renderGridDesktop() {
-    const grid = $("#grid-desktop");
-    if (!grid) return;
-    grid.innerHTML = filtered().map(cardHtmlDesktop).join("");
-  }
-
   /* ===== Rendu : grille accueil ===== */
   function renderGrid() {
     const items = filtered();
     const grid = $("#grid");
     grid.innerHTML = items.map(cardHtml).join("");
     $("#grid-empty").hidden = items.length > 0;
-    renderGridDesktop(); // alimente aussi la grille desktop (affichée seulement > 1024px)
+    if (window.psnDesktop) psnDesktop.onDataChange(); // rafraîchit l'UI desktop
   }
 
   /* ===== Rendu : favoris ===== */
@@ -882,11 +924,10 @@
     const cb = $("#cart-badge");
     cb.textContent = count || "";
     cb.dataset.count = count;
-    const cbd = $("#cart-badge-d"); // panier desktop (header)
-    if (cbd) { cbd.textContent = count || ""; cbd.dataset.count = count; }
     const fb = $("#fav-badge");
     fb.textContent = store.favs.length || "";
     fb.dataset.count = store.favs.length;
+    if (window.psnDesktop) psnDesktop.refreshBadges();
   }
 
   /* ===== Actions ===== */
@@ -1665,10 +1706,6 @@
     logo.addEventListener("pointerup", cancelHold);
     logo.addEventListener("pointerleave", cancelHold);
     logo.addEventListener("pointercancel", cancelHold);
-    // Desktop uniquement : le logo ramène à l'accueil (mobile inchangé).
-    logo.addEventListener("click", () => {
-      if (window.matchMedia("(min-width: 1025px)").matches) go("accueil");
-    });
   })();
 
   // Centre de notifications interne (web) — lit les alertes enregistrées en base.
@@ -1692,11 +1729,9 @@
     }
 
     function setBadge(n) {
-      [$("#notif-badge"), $("#notif-badge-d")].forEach((b) => {
-        if (!b) return;
-        b.textContent = n ? (n > 99 ? "99+" : String(n)) : "";
-        b.dataset.count = n;
-      });
+      const b = $("#notif-badge");
+      if (b) { b.textContent = n ? (n > 99 ? "99+" : String(n)) : ""; b.dataset.count = n; }
+      if (window.psnDesktop) psnDesktop.setNotifBadge(n);
     }
     async function refreshBadge() {
       const t = tok();
@@ -1771,6 +1806,367 @@
   })();
   window.psnNotif = psnNotif;
 
+  /* ================= INTERFACE DESKTOP PREMIUM (module psnDesktop) =================
+     Widgets: DesktopHeader / DesktopSidebar / DesktopGrid / DesktopProductCard /
+     DesktopSmartPanel (Profile · Product · Cart · Notification · Favorites · Compare).
+     Indépendant du mobile : ne lit/écrit que l'état partagé (store, PROFILE, PRODUCTS)
+     et réutilise les actions existantes (addToCart, toggleFav, changeQty…). */
+  const psnDesktop = (function () {
+    let started = false;
+    const F = { cats: new Set(), brands: new Set(), conds: new Set(), inStock: false, priceMax: Infinity, query: "" };
+    let mode = "profile";            // profile | product | cart | notif | favoris | compare
+    let curPid = null, curImg = null, ordersCount = null, priceCeil = 0, prevMode = "profile";
+    const recent = [], compare = new Set();
+    let notifItems = [];
+
+    const $d = (id) => document.getElementById(id);
+    const money = (n) => fmt(n);
+    const uniq = (a) => [...new Set(a.filter(Boolean))];
+    const heart = (on) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="${on ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/></svg>`;
+    const toggleSet = (s, v, on) => { on ? s.add(v) : s.delete(v); };
+
+    /* ---- Filtrage (état desktop indépendant du mobile) ---- */
+    function dkFiltered() {
+      const q = F.query.trim().toLowerCase();
+      return PRODUCTS.filter((p) => {
+        if (F.cats.size && !F.cats.has(p.category)) return false;
+        if (F.brands.size && !F.brands.has(p.brand)) return false;
+        if (F.conds.size && !(p.condition && F.conds.has(p.condition))) return false;
+        if (F.inStock && !(p.stock > 0)) return false;
+        if ((p.price || 0) > F.priceMax) return false;
+        if (q && !((p.brand + " " + p.name).toLowerCase().includes(q))) return false;
+        return true;
+      });
+    }
+
+    /* ---- DesktopSidebar ---- */
+    function buildSidebar() {
+      const cats = CATEGORIES.filter((c) => c !== "Tous");
+      const brands = uniq(PRODUCTS.map((p) => p.brand)).sort();
+      const conds = uniq(PRODUCTS.map((p) => p.condition));
+      priceCeil = Math.max(1, ...PRODUCTS.map((p) => p.price || 0));
+      if (F.priceMax === Infinity) F.priceMax = priceCeil;
+      const cCount = (c) => PRODUCTS.filter((p) => p.category === c).length;
+      const bCount = (b) => PRODUCTS.filter((p) => p.brand === b).length;
+      const opt = (name, set, val, cnt) =>
+        `<label class="dk-fopt"><input type="checkbox" data-dkf="${name}" value="${esc(val)}" ${set.has(val) ? "checked" : ""}><span>${esc(val)}</span>${cnt != null ? `<span class="cnt">${cnt}</span>` : ""}</label>`;
+      let h = `<div class="dk-fgroup"><h4>Catégories</h4>${cats.map((c) => opt("cat", F.cats, c, cCount(c))).join("")}</div>`;
+      if (brands.length) h += `<div class="dk-fgroup"><h4>Marques</h4>${brands.map((b) => opt("brand", F.brands, b, bCount(b))).join("")}</div>`;
+      h += `<div class="dk-fgroup"><h4>Prix maximum</h4><input type="range" id="dk-price" min="0" max="${priceCeil}" step="5000" value="${F.priceMax}"><div class="dk-price-val" id="dk-price-val">Jusqu'à ${money(F.priceMax)}</div></div>`;
+      h += `<div class="dk-fgroup"><h4>Disponibilité</h4><label class="dk-fopt"><input type="checkbox" data-dkf="stock" ${F.inStock ? "checked" : ""}><span>En stock uniquement</span></label></div>`;
+      if (conds.length) h += `<div class="dk-fgroup"><h4>État</h4>${conds.map((c) => opt("cond", F.conds, c)).join("")}</div>`;
+      h += `<button class="dk-reset" id="dk-reset">Réinitialiser les filtres</button>`;
+      $d("dk-sidebar").innerHTML = h;
+    }
+    function resetFilters() {
+      F.cats.clear(); F.brands.clear(); F.conds.clear(); F.inStock = false; F.priceMax = priceCeil; F.query = "";
+      const s = $d("dk-search-input"); if (s) s.value = "";
+      buildSidebar(); renderGrid();
+    }
+
+    /* ---- DesktopProductCard ---- */
+    function dkCard(p) {
+      const isFav = store.favs.includes(p.id);
+      const out = p.stock <= 0;
+      const disc = p.oldPrice ? Math.round((1 - p.price / p.oldPrice) * 100) : 0;
+      let badge = "";
+      if (out) badge = '<span class="dk-cbadge out">Épuisé</span>';
+      else if (disc > 0) badge = `<span class="dk-cbadge promo">-${disc}%</span>`;
+      else if (p.tag === "hot") badge = '<span class="dk-cbadge hot">HOT</span>';
+      const rating = p.ratingCount > 0
+        ? `<div class="dk-crating">★ ${Number(p.rating).toFixed(1)} <span>(${p.ratingCount})</span></div>`
+        : '<div class="dk-crating"><span>Nouveau</span></div>';
+      const chk = compare.has(p.id);
+      return `<article class="dk-card ${chk ? "sel" : ""}" data-dkopen="${p.id}">
+        <div class="dk-cmedia">
+          ${badge}
+          <button class="dk-cfav ${isFav ? "on" : ""}" data-dkfav="${p.id}" aria-label="Favori">${heart(isFav)}</button>
+          <label class="dk-ccmp" data-dkcmpwrap><input type="checkbox" data-dkcmp="${p.id}" ${chk ? "checked" : ""}> Comparer</label>
+          ${mediaHtml(p)}
+        </div>
+        <div class="dk-cbody">
+          <div class="dk-cseller">${esc(p.brand || "portable.sn")}</div>
+          <div class="dk-cname">${esc(p.name)}</div>
+          ${rating}
+          <div class="dk-cprices"><span class="dk-cprice">${money(p.price)}</span>${p.oldPrice ? `<span class="dk-cold">${money(p.oldPrice)}</span>` : ""}</div>
+          ${!out && p.defaultVariantId ? `<button class="dk-cadd" data-dkadd="${p.defaultVariantId}">Ajouter au panier</button>` : '<button class="dk-cadd dk-cadd-off" disabled>Indisponible</button>'}
+        </div>
+      </article>`;
+    }
+
+    /* ---- DesktopGrid ---- */
+    function renderGrid() {
+      const items = dkFiltered();
+      $d("dk-cat-title").textContent = F.cats.size === 1 ? [...F.cats][0] : (F.query ? "Résultats" : "Catalogue");
+      $d("dk-cat-count").textContent = items.length + (items.length > 1 ? " produits" : " produit");
+      $d("dk-grid").innerHTML = items.length
+        ? items.map(dkCard).join("")
+        : '<div class="dk-empty" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><p>Aucun produit ne correspond à ces filtres.</p></div>';
+    }
+
+    /* ---- Smart Panel ---- */
+    function wrap(title, body, back) {
+      return `<div class="dk-panel">${back ? '<button class="dk-back" data-dkback>← Retour au profil</button>' : ""}${title ? `<div class="dk-ptitle">${title}</div>` : ""}${body}</div>`;
+    }
+    function renderSmart() {
+      const s = $d("dk-smart-scroll"); if (!s) return;
+      if (mode === "product") s.innerHTML = productPanel();
+      else if (mode === "cart") s.innerHTML = cartPanel();
+      else if (mode === "notif") s.innerHTML = notifPanel();
+      else if (mode === "favoris") s.innerHTML = favPanel();
+      else if (mode === "compare") s.innerHTML = comparePanel();
+      else s.innerHTML = profilePanel();
+      updateIcons();
+    }
+    function updateIcons() {
+      const map = { favoris: "favoris", notifications: "notif", cart: "cart", profile: "profile" };
+      document.querySelectorAll("#dk-header .dk-ic").forEach((b) => b.classList.toggle("active", map[b.getAttribute("data-dk")] === mode));
+    }
+    function setMode(m) { mode = m; renderSmart(); }
+    function miniRow(x) {
+      return `<div class="dk-mini" data-dkopen="${x.id}"><div class="dk-mini-img">${x.image ? `<img src="${x.image}" alt="">` : mediaSvg(x.category)}</div><div class="dk-mini-info"><div class="dk-mini-name">${esc(x.name)}</div><div class="dk-mini-sub">${esc(x.brand || "")}</div></div><div class="dk-mini-price">${money(x.price)}</div></div>`;
+    }
+
+    /* DesktopProfilePanel */
+    const inpStyle = "width:100%;height:44px;border:1px solid var(--line);border-radius:10px;padding:0 12px;font-size:15px;background:var(--bg);color:var(--ink);margin-bottom:8px;box-sizing:border-box";
+    function profilePanel() {
+      const p = PROFILE;
+      if (!p) {
+        return wrap("", `<div class="dk-prof-head"><div class="dk-prof-av">?</div><div class="dk-prof-name">Bienvenue</div><div class="dk-prof-city">Connecte-toi à ton compte</div></div>
+          <input id="dk-login-phone" type="tel" inputmode="numeric" placeholder="Numéro" style="${inpStyle}">
+          <input id="dk-login-pin" type="password" placeholder="Mot de passe" style="${inpStyle}">
+          <button class="dk-btn dk-btn-primary" data-dklogin>Se connecter</button>
+          <p class="dk-mini-sub" style="text-align:center;margin-top:12px">Pas encore de compte ? Ajoute des produits au panier et commande sur WhatsApp.</p>`, false);
+      }
+      const initial = (p.fullName ? p.fullName.trim().charAt(0) : "?").toUpperCase();
+      const city = esc([p.quartier, p.region].filter(Boolean).join(", ")) || "—";
+      const recents = recent.map((id) => byId(id)).filter(Boolean).slice(0, 4);
+      const promo = PRODUCTS.filter((x) => x.oldPrice && x.oldPrice > x.price).sort((a, b) => (1 - a.price / a.oldPrice) - (1 - b.price / b.oldPrice)).pop() || PRODUCTS.slice().sort((a, b) => (b.rating || 0) - (a.rating || 0))[0];
+      if (ordersCount == null && p.token) loadOrders();
+      let body = `<div class="dk-prof-head"><div class="dk-prof-av">${esc(initial)}</div><div class="dk-prof-name">${esc(p.fullName || "Client")}</div><div class="dk-prof-city">${city}</div></div>
+        <div class="dk-stats"><div class="dk-stat"><b>${store.favs.length}</b><span>Favoris</span></div><div class="dk-stat"><b>${ordersCount == null ? "…" : ordersCount}</b><span>Commandes</span></div></div>`;
+      if (recents.length) body += `<div class="dk-sec">Derniers produits consultés</div>` + recents.map(miniRow).join("");
+      if (promo) body += `<div class="dk-sec">Promotion</div><div class="dk-promo" data-dkopen="${promo.id}" style="cursor:pointer"><b>${esc(promo.name)}</b><p>${promo.oldPrice ? `Économise ${money(promo.oldPrice - promo.price)} — ` : ""}${money(promo.price)}</p></div>`;
+      body += `<button class="dk-btn dk-btn-ghost" data-dklogout style="margin-top:14px">Se déconnecter</button>`;
+      return wrap("", body, false);
+    }
+    async function loadOrders() {
+      try { const { data } = await sb.rpc("mes_commandes", { p_token: PROFILE.token }); ordersCount = (data || []).length; if (mode === "profile") renderSmart(); } catch (_) { ordersCount = 0; }
+    }
+    async function dkLogin() {
+      const phone = (($d("dk-login-phone") || {}).value || "").replace(/\D/g, "");
+      const pin = (($d("dk-login-pin") || {}).value || "").trim();
+      if (phone.length !== 9) return toast("Numéro invalide (9 chiffres).");
+      if (!/^\d{6}$/.test(pin)) return toast("Mot de passe à 6 chiffres.");
+      try {
+        const { data, error } = await sb.rpc("connexion_client", { p_phone: phone, p_pin: pin });
+        if (error) return toast("Connexion impossible.");
+        if (!data || data.ok === false) return toast((data && data.error) || "Identifiants incorrects.");
+        setProfileFromAccount(data); applyProfileUI(); ordersCount = null; renderSmart(); refreshBadges();
+        if (window.psnNotif) psnNotif.refreshBadge();
+        toast("Connecté ✓");
+      } catch (_) { toast("Connexion impossible."); }
+    }
+
+    /* DesktopProductPanel */
+    function specRows(p) {
+      const colors = uniq((p.variants || []).map((v) => v.color));
+      const storages = uniq((p.variants || []).map((v) => v.storage));
+      const rows = [["Marque", p.brand || "—"]];
+      if (p.condition) rows.push(["État", p.condition]);
+      if (storages.length) rows.push(["Stockage", storages.join(" / ")]);
+      if (colors.length) rows.push(["Couleurs", colors.join(", ")]);
+      rows.push(["Disponibilité", p.stock > 0 ? (p.stock <= 5 ? `Bientôt épuisé (${p.stock})` : "En stock") : "Rupture"]);
+      if (p.ratingCount > 0) rows.push(["Note", `★ ${Number(p.rating).toFixed(1)} (${p.ratingCount})`]);
+      rows.push(["Livraison", "Paiement à la livraison"]);
+      return rows.map(([k, v]) => `<div class="dk-pp-spec"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("");
+    }
+    function productPanel() {
+      const p = byId(curPid); if (!p) return profilePanel();
+      const imgs = (p.images && p.images.length) ? p.images : [];
+      const cur = curImg && imgs.includes(curImg) ? curImg : (imgs[0] || null);
+      const out = p.stock <= 0;
+      const disc = p.oldPrice ? Math.round((1 - p.price / p.oldPrice) * 100) : 0;
+      const main = cur ? `<img src="${cur}" alt="${esc(p.name)}">` : mediaSvg(p.category);
+      const thumbs = imgs.length > 1 ? `<div class="dk-pp-thumbs">${imgs.map((u) => `<div class="dk-pp-thumb ${u === cur ? "active" : ""}" data-dkimg="${esc(u)}"><img src="${u}" alt=""></div>`).join("")}</div>` : "";
+      const isFav = store.favs.includes(p.id);
+      const body = `<div class="dk-pp-main">${main}${disc > 0 ? `<span class="dk-cbadge promo" style="top:12px;left:12px">-${disc}%</span>` : ""}</div>${thumbs}
+        <div class="dk-pp-seller">${esc(p.brand || "portable.sn")}</div>
+        <div class="dk-pp-name">${esc(p.name)}</div>
+        <div class="dk-pp-prices"><span class="dk-pp-price">${money(p.price)}</span>${p.oldPrice ? `<span class="dk-pp-old">${money(p.oldPrice)}</span>` : ""}${disc > 0 ? `<span class="dk-pp-pbadge">-${disc}%</span>` : ""}</div>
+        ${p.description ? `<p class="dk-pp-desc">${esc(p.description)}</p>` : ""}
+        <div class="dk-sec">Caractéristiques</div>${specRows(p)}
+        <div class="dk-pp-actions">
+          ${out ? '<button class="dk-btn" disabled>Indisponible</button>' : `<div class="dk-two"><button class="dk-btn dk-btn-primary" data-dkadd="${p.defaultVariantId}">Ajouter au panier</button><button class="dk-btn dk-btn-buy" data-dkbuy="${p.defaultVariantId}">Acheter</button></div>`}
+          <div class="dk-two"><button class="dk-btn dk-btn-wa" data-dkwa="${p.id}">WhatsApp</button><button class="dk-btn dk-btn-ghost" data-dkfav2="${p.id}">${isFav ? "♥ Favori" : "♡ Favori"}</button></div>
+          <button class="dk-btn dk-btn-ghost" data-dkshare="${p.id}">Partager</button>
+        </div>`;
+      return wrap("", body, true);
+    }
+
+    /* DesktopCartPanel */
+    function cartPanel() {
+      const ids = Object.keys(store.cart);
+      if (!ids.length) return wrap("Panier", `<div class="dk-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg><p>Ton panier est vide.</p></div>`, false);
+      let total = 0;
+      const rows = ids.map((vid) => {
+        const v = variantById(vid); if (!v) return "";
+        const q = store.cart[vid]; total += v.price * q; const p = v.product;
+        const lbl = v.label && v.label !== "Standard" ? ` · ${esc(v.label)}` : "";
+        return `<div class="dk-mini"><div class="dk-mini-img">${p && p.image ? `<img src="${p.image}" alt="">` : mediaSvg(p && p.category)}</div>
+          <div class="dk-mini-info"><div class="dk-mini-name">${esc(p ? p.name : "Produit")}${lbl}</div><div class="dk-mini-sub">${money(v.price)}</div></div>
+          <div style="display:flex;align-items:center;gap:4px"><button class="dk-mini-x" data-dkdec="${vid}">–</button><b>${q}</b><button class="dk-mini-x" data-dkinc="${vid}">+</button><button class="dk-mini-x" data-dkdel="${vid}" title="Retirer">✕</button></div></div>`;
+      }).join("");
+      return wrap("Panier", rows + `<div class="dk-total"><span>Total</span><span>${money(total)}</span></div><button class="dk-btn dk-btn-wa" data-dkorder>Commander sur WhatsApp</button>`, false);
+    }
+    function orderWA() {
+      const ids = Object.keys(store.cart); if (!ids.length) return;
+      const lines = ["Bonjour, je souhaite commander :"]; let total = 0;
+      ids.forEach((vid) => { const v = variantById(vid); if (!v) return; const q = store.cart[vid]; total += v.price * q; lines.push(`- ${v.product ? v.product.name : ""}${v.label && v.label !== "Standard" ? " (" + v.label + ")" : ""} x${q} = ${fmt(v.price * q)}`); });
+      lines.push("Total : " + fmt(total));
+      if (PROFILE && PROFILE.fullName) lines.push("Nom : " + PROFILE.fullName + (PROFILE.phone ? " (" + PROFILE.phone + ")" : ""));
+      window.open(`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
+    }
+
+    /* DesktopNotificationPanel */
+    function notifPanel() {
+      if (!PROFILE || !PROFILE.token) return wrap("Notifications", `<div class="dk-empty"><p>Connecte-toi pour voir tes notifications.</p></div>`, false);
+      setTimeout(loadNotifs, 0);
+      return wrap("Notifications", `<div id="dk-notif-body"><p class="dk-empty">Chargement…</p></div>`, false);
+    }
+    async function loadNotifs() {
+      if (!PROFILE || !PROFILE.token) return;
+      try {
+        const { data } = await sb.rpc("mes_notifications", { p_token: PROFILE.token });
+        notifItems = data || [];
+        const b = $d("dk-notif-body"); if (!b) return;
+        b.innerHTML = notifItems.length ? notifItems.map((n) => `<div class="dk-mini ${n.is_read ? "" : "dk-notif-unread"}" style="align-items:flex-start"><div class="dk-mini-info"><div class="dk-mini-name" style="white-space:normal">${esc(n.title)}</div><div class="dk-mini-sub">${esc(n.message)}</div></div><button class="dk-mini-x" data-dknotifdel="${n.id}">✕</button></div>`).join("") : `<div class="dk-empty"><p>Aucune notification.</p></div>`;
+        if (notifItems.some((n) => !n.is_read)) { await sb.rpc("notifications_marquer_lues", { p_token: PROFILE.token }); if (window.psnNotif) psnNotif.refreshBadge(); }
+      } catch (_) {}
+    }
+    async function delNotif(id) {
+      if (!PROFILE || !PROFILE.token) return;
+      try { await sb.rpc("notification_supprimer", { p_token: PROFILE.token, p_id: Number(id) }); } catch (_) {}
+      notifItems = notifItems.filter((n) => String(n.id) !== String(id)); loadNotifs();
+    }
+
+    /* DesktopFavoritesPanel */
+    function favPanel() {
+      const items = PRODUCTS.filter((p) => store.favs.includes(p.id));
+      if (!items.length) return wrap("Favoris", `<div class="dk-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/></svg><p>Aucun favori pour l'instant.</p></div>`, false);
+      return wrap("Favoris", items.map((x) => `<div class="dk-mini" data-dkopen="${x.id}"><div class="dk-mini-img">${x.image ? `<img src="${x.image}" alt="">` : mediaSvg(x.category)}</div><div class="dk-mini-info"><div class="dk-mini-name">${esc(x.name)}</div><div class="dk-mini-price">${money(x.price)}</div></div><button class="dk-mini-x" data-dkfav="${x.id}" title="Retirer">✕</button></div>`).join(""), false);
+    }
+
+    /* DesktopComparePanel */
+    function toggleCompare(id) {
+      if (compare.has(id)) compare.delete(id);
+      else { if (compare.size >= 3) { toast("3 produits maximum en comparaison."); return; } compare.add(id); }
+      renderGrid();
+      if (compare.size >= 2) { if (mode !== "compare") prevMode = mode; mode = "compare"; renderSmart(); }
+      else if (mode === "compare") { mode = prevMode === "compare" ? "profile" : prevMode; renderSmart(); }
+    }
+    function comparePanel() {
+      const items = [...compare].map(byId).filter(Boolean);
+      if (items.length < 2) { mode = "profile"; return profilePanel(); }
+      const feats = [
+        ["Prix", (p) => money(p.price)],
+        ["Marque", (p) => p.brand || "—"],
+        ["État", (p) => p.condition || "—"],
+        ["Stockage", (p) => uniq((p.variants || []).map((v) => v.storage)).join(" / ") || "—"],
+        ["Disponibilité", (p) => p.stock > 0 ? "✔" : "✕"],
+        ["Note", (p) => p.ratingCount > 0 ? "★ " + Number(p.rating).toFixed(1) : "—"],
+      ];
+      const head = `<tr><th class="feat"></th>${items.map((p) => `<th>${p.image ? `<img src="${p.image}" alt="">` : ""}<div class="nm">${esc(p.name)}</div><button class="dk-mini-x" data-dkcmprm="${p.id}">retirer</button></th>`).join("")}</tr>`;
+      const rows = feats.map(([k, fn]) => `<tr><td class="feat">${esc(k)}</td>${items.map((p) => `<td>${esc(String(fn(p)))}</td>`).join("")}</tr>`).join("");
+      const bar = `<div class="dk-cmp-bar"><span>${items.length} produits comparés</span><button class="dk-cmp-clear" data-dkcmpclear>Tout effacer</button></div>`;
+      return wrap("Comparaison", bar + `<table class="dk-cmp-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`, false);
+    }
+
+    /* ---- Actions produit ---- */
+    function openProduct(id) {
+      curPid = id; curImg = null;
+      const i = recent.indexOf(id); if (i >= 0) recent.splice(i, 1);
+      recent.unshift(id); if (recent.length > 8) recent.length = 8;
+      setMode("product");
+    }
+    function productWA(id) { const p = byId(id); if (!p) return; window.open(`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(`Bonjour, je suis intéressé par : ${p.name} (${fmt(p.price)}) — ${location.origin}`)}`, "_blank"); }
+    function shareProduct(id) {
+      const p = byId(id); if (!p) return;
+      const url = location.origin + "/?p=" + encodeURIComponent(p.slug || p.id);
+      if (navigator.share) navigator.share({ title: p.name, text: p.name, url }).catch(() => {});
+      else if (navigator.clipboard) { navigator.clipboard.writeText(url); toast("Lien copié ✓"); }
+      else toast(url);
+    }
+
+    /* ---- Badges & rafraîchissement ---- */
+    function setBadgeEl(id, n) { const b = $d(id); if (!b) return; b.textContent = n ? (n > 99 ? "99+" : String(n)) : ""; b.dataset.count = n; }
+    function refreshBadges() {
+      if (!started) return;
+      setBadgeEl("dk-cart-badge", Object.values(store.cart).reduce((a, b) => a + b, 0));
+      setBadgeEl("dk-fav-badge", store.favs.length);
+      const av = $d("dk-avatar"); if (av) av.textContent = (PROFILE && PROFILE.fullName ? PROFILE.fullName.trim().charAt(0) : "?").toUpperCase();
+    }
+    function setNotifBadge(n) { setBadgeEl("dk-notif-badge", Number(n) || 0); }
+    function onDataChange() {
+      if (!started) return;
+      renderGrid(); refreshBadges();
+      if (["favoris", "cart", "compare", "profile"].includes(mode)) renderSmart();
+    }
+
+    /* ---- Événements ---- */
+    function wire() {
+      const root = $d("desktop-app");
+      $d("dk-logo").addEventListener("click", () => { resetFilters(); setMode("profile"); $d("dk-catalog").scrollTo({ top: 0, behavior: "smooth" }); });
+      root.addEventListener("input", (e) => {
+        if (e.target.id === "dk-search-input") { F.query = e.target.value; renderGrid(); }
+        else if (e.target.id === "dk-price") { F.priceMax = Number(e.target.value); const v = $d("dk-price-val"); if (v) v.textContent = "Jusqu'à " + money(F.priceMax); renderGrid(); }
+      });
+      root.addEventListener("change", (e) => {
+        const el = e.target; if (!el.matches("[data-dkf]")) return;
+        const f = el.getAttribute("data-dkf");
+        if (f === "cat") toggleSet(F.cats, el.value, el.checked);
+        else if (f === "brand") toggleSet(F.brands, el.value, el.checked);
+        else if (f === "cond") toggleSet(F.conds, el.value, el.checked);
+        else if (f === "stock") F.inStock = el.checked;
+        renderGrid();
+      });
+      root.addEventListener("click", (e) => {
+        const cmp = e.target.closest("[data-dkcmpwrap]");
+        if (cmp) { e.preventDefault(); e.stopPropagation(); toggleCompare(cmp.querySelector("[data-dkcmp]").getAttribute("data-dkcmp")); return; }
+        if (e.target.closest("#dk-reset")) { resetFilters(); return; }
+        const t = e.target.closest("[data-dk],[data-dkopen],[data-dkfav],[data-dkfav2],[data-dkadd],[data-dkbuy],[data-dkwa],[data-dkshare],[data-dkback],[data-dkinc],[data-dkdec],[data-dkdel],[data-dkorder],[data-dkimg],[data-dknotifdel],[data-dkcmprm],[data-dkcmpclear],[data-dklogin],[data-dklogout]");
+        if (!t) return;
+        if (t.hasAttribute("data-dk")) { const m = { favoris: "favoris", notifications: "notif", cart: "cart", profile: "profile" }[t.getAttribute("data-dk")]; setMode(m); }
+        else if (t.dataset.dkopen) openProduct(t.dataset.dkopen);
+        else if (t.dataset.dkfav) toggleFav(t.dataset.dkfav);
+        else if (t.dataset.dkfav2) { toggleFav(t.dataset.dkfav2); renderSmart(); }
+        else if (t.dataset.dkadd) { addToCart(t.dataset.dkadd); refreshBadges(); }
+        else if (t.dataset.dkbuy) { addToCart(t.dataset.dkbuy); setMode("cart"); }
+        else if (t.dataset.dkwa) productWA(t.dataset.dkwa);
+        else if (t.dataset.dkshare) shareProduct(t.dataset.dkshare);
+        else if (t.hasAttribute("data-dkback")) setMode("profile");
+        else if (t.dataset.dkinc) { changeQty(t.dataset.dkinc, 1); renderSmart(); }
+        else if (t.dataset.dkdec) { changeQty(t.dataset.dkdec, -1); renderSmart(); }
+        else if (t.dataset.dkdel) { removeFromCart(t.dataset.dkdel); renderSmart(); }
+        else if (t.hasAttribute("data-dkorder")) orderWA();
+        else if (t.dataset.dkimg) { curImg = t.dataset.dkimg; renderSmart(); }
+        else if (t.dataset.dknotifdel) delNotif(t.dataset.dknotifdel);
+        else if (t.dataset.dkcmprm) toggleCompare(t.dataset.dkcmprm);
+        else if (t.hasAttribute("data-dkcmpclear")) { compare.clear(); renderGrid(); setMode("profile"); }
+        else if (t.hasAttribute("data-dklogin")) dkLogin();
+        else if (t.hasAttribute("data-dklogout")) { logoutProfile(); ordersCount = null; refreshBadges(); setMode("profile"); }
+      });
+    }
+
+    function start() {
+      if (started) return; started = true;
+      wire(); buildSidebar(); renderGrid(); refreshBadges(); setMode("profile");
+      if (window.psnNotif) psnNotif.refreshBadge();
+    }
+    return { start, onDataChange, refreshBadges, setNotifBadge, openProduct };
+  })();
+  window.psnDesktop = psnDesktop;
+
   // Changements de sélecteurs (zone de livraison, région/quartier du profil)
   document.addEventListener("change", (e) => {
     const id = e.target && e.target.id;
@@ -1826,6 +2222,7 @@
       brand: p.brand || "",
       name: p.name,
       description: p.description || "",
+      condition: p.condition || null,
       price: p.prix_base ?? def.price ?? 0,
       oldPrice: def.oldPrice || null,
       stock: p.stock_total ?? def.stock ?? 0,
@@ -1854,7 +2251,7 @@
     ZONES = zones || [];
 
     const { data: prods, error } = await sb.from("products")
-      .select("id,slug,name,brand,description,is_hot,prix_base,stock_total,rating_avg,rating_count,image_url," +
+      .select("id,slug,name,brand,description,condition,is_hot,prix_base,stock_total,rating_avg,rating_count,image_url," +
               "category:categories(name)," +
               "variants:product_variants(id,label,color,storage,attributes,price,old_price,stock_actuel,is_active,position)," +
               "images:product_images(url,position,is_primary)")
@@ -1882,6 +2279,7 @@
       renderCats();
       renderGrid();
       renderBadges();
+      psnDesktop.start(); // active l'interface desktop (rendue visible seulement > 1200px)
     } catch (e) {
       console.error("Erreur de chargement Supabase:", e);
       $("#grid").innerHTML =
