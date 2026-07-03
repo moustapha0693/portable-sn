@@ -1336,7 +1336,7 @@
         <h3>Créer un compte</h3>
         <p class="pf-hint">Renseigne tes infos et choisis un mot de passe à 6 chiffres (réutilisable sur tous tes appareils).</p>
         <div class="pf-field"><label>Nom complet</label>
-          <input id="pf-name" type="text" placeholder="ex. Awa Diop" /></div>
+          <input id="pf-name" type="text" placeholder="ex. Mariama Diarra" /></div>
         <div class="pf-field"><label>Numéro de téléphone</label>
           <div class="pf-phone"><span>+221</span><input id="auth-phone" type="tel" inputmode="numeric" maxlength="9" placeholder="77 123 45 67" /></div></div>
         <div class="pf-field"><label>Région</label><select id="pf-region">${regionSelectHtml(region)}</select></div>
@@ -1361,7 +1361,7 @@
       <div class="account-card">
         <h3>Modifier mes informations</h3>
         <div class="pf-field"><label>Nom complet</label>
-          <input id="pf-name" type="text" value="${esc(PROFILE ? PROFILE.fullName : "")}" placeholder="ex. Awa Diop" /></div>
+          <input id="pf-name" type="text" value="${esc(PROFILE ? PROFILE.fullName : "")}" placeholder="ex. Mariama Diarra" /></div>
         <div class="pf-field"><label>Région</label><select id="pf-region">${regionSelectHtml(region)}</select></div>
         <div class="pf-field"><label>Quartier</label><select id="pf-quartier">${quartierOptions(region, quartierSel)}</select></div>
         <div class="pf-field pf-autre" ${quartierSel === "Autre" ? "" : "hidden"}><label>Autre — précise ton quartier</label>
