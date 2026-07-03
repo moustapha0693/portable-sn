@@ -250,7 +250,9 @@
     <h1>portable<span class="dot">.sn</span></h1>
     <p>Espace d'administration</p>
     <div class="msg err" id="login-msg"></div>
-    <div class="field"><label>Numéro</label><input id="login-phone" type="tel" inputmode="numeric" autocomplete="username" placeholder="77 000 00 00" required /></div>
+    <div class="field" id="login-who" style="display:none"><label>Compte</label>
+      <div id="login-who-val" style="height:44px;display:flex;align-items:center;padding:0 12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;font-weight:700"></div></div>
+    <div class="field" id="login-phone-field"><label>Numéro</label><input id="login-phone" type="tel" inputmode="numeric" autocomplete="username" placeholder="77 000 00 00" /></div>
     <div class="field"><label>Mot de passe</label><input id="login-pass" type="password" autocomplete="current-password" required /></div>
     <button class="btn btn-primary" id="login-btn" type="submit">Se connecter</button>
   </form>
@@ -408,7 +410,17 @@
   }
 
   // Pré-remplit le numéro depuis la session boutique (même origine que index.html).
-  (function prefillPhone() { const el = $("#login-phone"); if (el) el.value = storedPhone(); })();
+  // Si un numéro boutique est connu, on ne demande que le mot de passe.
+  (function prefillPhone() {
+    const ph = storedPhone();
+    const el = $("#login-phone"); if (el) el.value = ph;
+    if (ph) {
+      $("#login-phone-field").style.display = "none";
+      $("#login-who").style.display = "";
+      $("#login-who-val").textContent = ph;
+      setTimeout(() => { const p = $("#login-pass"); if (p) p.focus(); }, 60);
+    }
+  })();
 
   // Connexion par numéro + mot de passe (même logique que le geste de la boutique).
   // Propriétaire : mot de passe de son compte Supabase. Assistant : mot de passe

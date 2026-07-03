@@ -1642,14 +1642,15 @@
     logo.style.cursor = "pointer";
     const norm = (v) => String(v == null ? "" : v).replace(/\D/g, "").slice(-9);
 
-    let gate, phoneEl, passEl, errEl, okBtn;
+    let gate, phoneEl, passEl, errEl, okBtn, whoEl, hintEl;
     function buildGate() {
       gate = document.createElement("div");
       gate.className = "admin-gate";
       gate.innerHTML =
         '<div class="admin-gate-box">' +
           '<h3>Espace admin</h3>' +
-          '<p>Saisis ton numéro et ton mot de passe.</p>' +
+          '<p class="ag-hint">Saisis ton mot de passe pour continuer.</p>' +
+          '<div class="ag-who" style="display:none;font-size:14px;font-weight:700;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px"></div>' +
           '<input type="tel" inputmode="numeric" class="ag-phone" autocomplete="off" placeholder="Ton numéro" />' +
           '<input type="password" class="ag-pass" autocomplete="current-password" placeholder="Mot de passe" style="margin-top:8px" />' +
           '<div class="admin-gate-err"></div>' +
@@ -1661,6 +1662,8 @@
       document.body.appendChild(gate);
       phoneEl = gate.querySelector(".ag-phone");
       passEl = gate.querySelector(".ag-pass");
+      whoEl = gate.querySelector(".ag-who");
+      hintEl = gate.querySelector(".ag-hint");
       errEl = gate.querySelector(".admin-gate-err");
       okBtn = gate.querySelector(".ag-ok");
       gate.querySelector(".ag-cancel").addEventListener("click", closeGate);
@@ -1672,13 +1675,24 @@
     }
     function openGate() {
       if (!gate) buildGate();
-      // Pré-remplit le numéro si un client est connecté (raccourci pour le propriétaire).
-      phoneEl.value = (PROFILE && PROFILE.phone) ? norm(PROFILE.phone) : "";
+      // Si connecté à la boutique : on réutilise le numéro et on ne demande que le mot de passe.
+      const known = (PROFILE && PROFILE.phone) ? norm(PROFILE.phone) : "";
+      phoneEl.value = known;
+      if (known) {
+        phoneEl.style.display = "none";
+        whoEl.style.display = "block";
+        whoEl.textContent = "Compte : " + known;
+        hintEl.textContent = "Saisis ton mot de passe pour continuer.";
+      } else {
+        phoneEl.style.display = "";
+        whoEl.style.display = "none";
+        hintEl.textContent = "Saisis ton numéro et ton mot de passe.";
+      }
       passEl.value = ""; errEl.textContent = "";
       phoneEl.classList.remove("err"); passEl.classList.remove("err");
       okBtn.disabled = false; okBtn.textContent = "Entrer";
       gate.classList.add("show");
-      setTimeout(() => (phoneEl.value ? passEl : phoneEl).focus(), 50);
+      setTimeout(() => (known ? passEl : phoneEl).focus(), 50);
     }
     function closeGate() { if (gate) gate.classList.remove("show"); }
     function fail(msg, el) {
