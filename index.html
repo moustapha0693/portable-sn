@@ -1732,7 +1732,17 @@
       if (e && e.type === "pointerdown" && e.button !== undefined && e.button !== 0) return;
       cancelHold();
       logo.classList.add("logo-hold");
-      timer = setTimeout(() => { cancelHold(); openGate(); }, 3000);
+      timer = setTimeout(async () => {
+        cancelHold();
+        // Le geste ne fonctionne que si le numéro connecté à la boutique est un admin.
+        const phone = (PROFILE && PROFILE.phone) ? norm(PROFILE.phone) : "";
+        if (!phone) return;                       // personne connecté -> rien
+        try {
+          const { data: kind } = await sb.rpc("admin_account_kind", { p_phone: phone });
+          if (kind) openGate();                   // numéro admin -> demande le mot de passe
+          // sinon : rien (accès invisible aux non-admins)
+        } catch (_) {}
+      }, 3000);
     };
     logo.addEventListener("pointerdown", startHold);
     logo.addEventListener("pointerup", cancelHold);
