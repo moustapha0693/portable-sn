@@ -828,7 +828,6 @@
   }
 
   /* ===================== Tableau de bord ===================== */
-  const fcfa = (n) => Number(n || 0).toLocaleString("fr-FR") + " FCFA";
   function timeShort(iso) {
     const d = new Date(iso);
     return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
@@ -844,16 +843,16 @@
     renderDashboard(data || {});
   }
 
-  function salesChart(data) {
+  function ordersChart(data) {
     if (!data.length) return '<div class="hint">Pas encore de données.</div>';
     const W = 580, H = 190, pad = 26, bw = (W - pad * 2) / data.length;
-    const max = Math.max(1, ...data.map((x) => Number(x.revenue) || 0));
+    const max = Math.max(1, ...data.map((x) => Number(x.orders) || 0));
     const parts = data.map((x, i) => {
-      const v = Number(x.revenue) || 0;
+      const v = Number(x.orders) || 0;
       const h = Math.round((v / max) * (H - 42));
       const bx = pad + i * bw + bw * 0.16, by = H - 22 - h, wid = bw * 0.68;
       const lbl = new Date(x.d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
-      let s = `<rect class="bar" x="${bx.toFixed(1)}" y="${by}" width="${wid.toFixed(1)}" height="${Math.max(h, 2)}" rx="3"><title>${lbl} — ${fcfa(v)} (${x.orders} cmd)</title></rect>`;
+      let s = `<rect class="bar" x="${bx.toFixed(1)}" y="${by}" width="${wid.toFixed(1)}" height="${Math.max(h, 2)}" rx="3"><title>${lbl} — ${v} commande${v > 1 ? "s" : ""}</title></rect>`;
       if (i % 2 === 0) s += `<text class="chart-x" x="${(pad + i * bw + bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${lbl}</text>`;
       return s;
     }).join("");
@@ -870,11 +869,11 @@
 
   function renderDashboard(d) {
     const kpis = [
-      { label: "Chiffre d'affaires", val: fcfa(d.revenue_total), sub: "Ce mois : " + fcfa(d.revenue_month), cls: "a-green", wide: true },
+      { label: "Utilisateurs de la plateforme", val: d.platform_users ?? 0, sub: "comptes inscrits", cls: "a-blue", wide: true },
       { label: "Commandes", val: d.orders_total ?? 0, sub: "Aujourd'hui : " + (d.orders_today ?? 0), cls: "a-blue", tab: "commandes" },
       { label: "En attente", val: d.orders_pending ?? 0, sub: "à traiter", cls: "a-orange", tab: "commandes" },
+      { label: "Livrées", val: d.orders_delivered ?? 0, sub: "terminées", cls: "a-green", tab: "commandes" },
       { label: "Stock bas", val: d.low_stock ?? 0, sub: "≤ 3 unités", cls: "a-red", tab: "produits" },
-      { label: "Clients", val: d.clients ?? 0, sub: "comptes boutique", cls: "a-blue" },
       { label: "Produits actifs", val: d.products_active ?? 0, sub: "en ligne", cls: "a-blue", tab: "produits" },
     ];
     const kpiHtml = '<div class="dash-kpis">' + kpis.map((k) =>
@@ -882,7 +881,7 @@
     ).join("") + "</div>";
 
     const top = (d.top_products || []).map((p, i) =>
-      `<div class="dlist-row"><span style="color:var(--muted);font-weight:800;width:16px">${i + 1}</span><div class="grow"><div class="nm">${esc(p.name)}</div></div><div style="text-align:right"><div class="nm">${p.qty} vendus</div><div class="sub">${fcfa(p.revenue)}</div></div></div>`
+      `<div class="dlist-row"><span style="color:var(--muted);font-weight:800;width:16px">${i + 1}</span><div class="grow"><div class="nm">${esc(p.name)}</div></div><div class="nm">${p.qty} vendus</div></div>`
     ).join("") || '<div class="hint">Aucune vente enregistrée.</div>';
 
     const low = (d.low_stock_list || []).map((v) =>
@@ -890,7 +889,7 @@
     ).join("") || '<div class="hint">Tout est bien approvisionné 👍</div>';
 
     const recent = (d.recent_orders || []).map((o) =>
-      `<div class="dlist-row"><div class="grow"><div class="nm">${esc(o.reference)}</div><div class="sub">${esc(o.name)} · ${timeShort(o.created_at)}</div></div><div style="text-align:right"><div class="nm">${fcfa(o.total)}</div><span class="status-badge s-${o.status}">${statusLabel(o.status)}</span></div></div>`
+      `<div class="dlist-row"><div class="grow"><div class="nm">${esc(o.reference)}</div><div class="sub">${esc(o.name)} · ${timeShort(o.created_at)}</div></div><span class="status-badge s-${o.status}">${statusLabel(o.status)}</span></div>`
     ).join("") || '<div class="hint">Aucune commande.</div>';
 
     const reviews = (d.reviews_pending > 0)
@@ -899,7 +898,7 @@
     $("#dash").innerHTML = kpiHtml + `
       <div class="dash-grid">
         <div>
-          <div class="dcard"><h3>Ventes des 14 derniers jours</h3>${salesChart(d.sales_14d || [])}</div>
+          <div class="dcard"><h3>Commandes des 14 derniers jours</h3>${ordersChart(d.orders_14d || [])}</div>
           <div class="dcard"><h3>Dernières commandes</h3>${recent}</div>
           <div class="dcard"><h3>Top produits</h3>${top}</div>
         </div>
